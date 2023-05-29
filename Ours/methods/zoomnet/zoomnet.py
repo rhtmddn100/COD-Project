@@ -266,7 +266,7 @@ class ZoomNet(BasicModelClass):
         x = self.d4(x + feats[1])
         x = cus_sample(x, mode="scale", factors=2)
         x = self.d3(x + feats[2])
-        x = cus_sample(x, mode="scale", factors=2)
+       # x = cus_sample(x, mode="scale", factors=2)
         # x = self.d2(x + feats[3])
         # x = cus_sample(x, mode="scale", factors=2)
         # x = self.d1(x + feats[4])
@@ -331,11 +331,13 @@ class ZoomNet(BasicModelClass):
         for name, preds in all_preds.items():
             resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:])
 
-            sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="mean")
-            weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - mask)
+            sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
+            weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
             # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
             w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
+            w_sod_loss = w_sod_loss.mean()
             losses.append(w_sod_loss)
+
             loss_str.append(f"{name}_BCE: {w_sod_loss.item():.5f}")
 
             if name == 'S_3':
