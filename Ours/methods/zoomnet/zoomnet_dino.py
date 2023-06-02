@@ -56,6 +56,7 @@ class TransLayer(nn.Module):
         # return c5, c4, c3, c2, c1
         return c5, c4, c3, c2
 
+
 class SIU(nn.Module):
     def __init__(self, in_dim):
         super().__init__()
@@ -92,10 +93,11 @@ class SIU(nn.Module):
             return lms, dict(attn_l=attn_l, attn_m=attn_m, attn_s=attn_s, l=l, m=m, s=s)
         return lms
 
+
 class GRA(nn.Module):
     def __init__(self, channel, subchannel):
         super(GRA, self).__init__()
-        self.group = channel//subchannel
+        self.group = channel // subchannel
         self.conv = nn.Sequential(
             nn.Conv2d(channel + self.group, channel, 3, padding=1), nn.ReLU(True),
         )
@@ -116,13 +118,15 @@ class GRA(nn.Module):
         elif self.group == 16:
             xs = torch.chunk(x, 16, dim=1)
             x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y,
-            xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y), 1)
+                               xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y),
+                              1)
         elif self.group == 32:
             xs = torch.chunk(x, 32, dim=1)
             x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y,
-            xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y,
-            xs[16], y, xs[17], y, xs[18], y, xs[19], y, xs[20], y, xs[21], y, xs[22], y, xs[23], y,
-            xs[24], y, xs[25], y, xs[26], y, xs[27], y, xs[28], y, xs[29], y, xs[30], y, xs[31], y), 1)
+                               xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y,
+                               xs[16], y, xs[17], y, xs[18], y, xs[19], y, xs[20], y, xs[21], y, xs[22], y, xs[23], y,
+                               xs[24], y, xs[25], y, xs[26], y, xs[27], y, xs[28], y, xs[29], y, xs[30], y, xs[31], y),
+                              1)
         else:
             raise Exception("Invalid Channel")
 
@@ -130,6 +134,7 @@ class GRA(nn.Module):
         y = y + self.score(x)
 
         return x, y
+
 
 class ReverseStage(nn.Module):
     def __init__(self, channel):
@@ -148,6 +153,7 @@ class ReverseStage(nn.Module):
         _, y = self.strong_gra(x, y)
 
         return y
+
 
 class HMU(nn.Module):
     def __init__(self, in_c, num_groups=4, hidden_dim=None):
@@ -232,13 +238,16 @@ class ZoomNet(BasicModelClass):
         super().__init__()
 
         # load pvt
-        self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = './pretrained_pvt/pvt_v2_b2.pth'
-        save_model = torch.load(path)
-        model_dict = self.backbone.state_dict()
-        state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
-        model_dict.update(state_dict)
-        self.backbone.load_state_dict(model_dict)
+
+        # self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
+        # path = './pretrained_pvt/pvt_v2_b2.pth'
+        # save_model = torch.load(path)
+        # model_dict = self.backbone.state_dict()
+        # state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
+        # model_dict.update(state_dict)
+        # self.backbone.load_state_dict(model_dict)
+
+        self.backbone = torch.hub.load('facebookresearch/dino:main', 'dino_vits8')
 
         # self.shared_encoder = timm.create_model(model_name="resnet50", pretrained=True, in_chans=3, features_only=True)
         self.translayer = TransLayer(out_c=64)  # [c5, c4, c3, c2, c1]
@@ -277,27 +286,27 @@ class ZoomNet(BasicModelClass):
         for l, m, s, layer in zip(l_trans_feats, m_trans_feats, s_trans_feats, self.merge_layers):
             siu_outs = layer(l=l, m=m, s=s)
             feats.append(siu_outs)
-        
-        #feats[0:2] = outputs of SIU 3~5
 
-        x = self.d5(feats[0]) # [bs,64,12,12]
-        x = cus_sample(x, mode="scale", factors=2) # [bs,64,24,24]
-        x = self.d4(x + feats[1]) # [bs,64,24,24]
-        x = cus_sample(x, mode="scale", factors=2) # [bs,64,48,48]
-        x = self.d3(x + feats[2]) # [bs,64,48,48]
-        x = cus_sample(x, mode="scale", factors=2) # [bs,64,96,96]
-        x = self.d2(x + feats[3]) # [bs,64,96,96]
+        # feats[0:2] = outputs of SIU 3~5
+
+        x = self.d5(feats[0])  # [bs,64,12,12]
+        x = cus_sample(x, mode="scale", factors=2)  # [bs,64,24,24]
+        x = self.d4(x + feats[1])  # [bs,64,24,24]
+        x = cus_sample(x, mode="scale", factors=2)  # [bs,64,48,48]
+        x = self.d3(x + feats[2])  # [bs,64,48,48]
+        x = cus_sample(x, mode="scale", factors=2)  # [bs,64,96,96]
+        x = self.d2(x + feats[3])  # [bs,64,96,96]
         # x = cus_sample(x, mode="scale", factors=2)
         # x = self.d1(x + feats[4])
         # x = cus_sample(x, mode="scale", factors=2)
 
-        #x = output of HMU 3
-        #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x)) # [bs,1,96,96]
-        S_g_pred = F.interpolate(S_g, scale_factor=4, mode='bilinear') # [bs,1,384,384]
+        # x = output of HMU 3
+        # coarse map
+        S_g = self.out_layer_01(self.out_layer_00(x))  # [bs,1,96,96]
+        S_g_pred = F.interpolate(S_g, scale_factor=4, mode='bilinear')  # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.125, mode='bilinear') # [bs,1,12,12]
+        guidance_g = F.interpolate(S_g, scale_factor=0.125, mode='bilinear')  # [bs,1,12,12]
         ra4_feat = self.RS5(feats[0], guidance_g)
         S_5 = ra4_feat + guidance_g
         S_5_pred = F.interpolate(S_5, scale_factor=32, mode='bilinear')  # Sup-2 (bs, 1, 11, 11) -> (bs, 1, 352, 352)
@@ -312,7 +321,7 @@ class ZoomNet(BasicModelClass):
         guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
         ra2_feat = self.RS3(feats[2], guidance_4)
         S_3 = ra2_feat + guidance_4
-        S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
+        S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')  # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
         # ---- reverse stage 2 ----
         guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
@@ -337,7 +346,7 @@ class ZoomNet(BasicModelClass):
             iter_percentage=kwargs["curr"]["iter_percentage"],
         )
         return dict(sal=output["S_2"].sigmoid()), loss, loss_str
-    
+
     def test_forward(self, data, **kwargs):
         output = self.body(
             l_scale=data["image1.5"],
@@ -352,7 +361,7 @@ class ZoomNet(BasicModelClass):
         losses = []
         loss_str = []
         # for main
-        #loss function: weighted BCE for each layer + ual loss for the last layer
+        # loss function: weighted BCE for each layer + ual loss for the last layer
         for name, preds in all_preds.items():
             resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:])
 
@@ -370,7 +379,7 @@ class ZoomNet(BasicModelClass):
                 ual_loss *= ual_coef
                 losses.append(ual_loss)
                 loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")
-        
+
         return sum(losses), " ".join(loss_str)
 
     def get_grouped_params(self):

@@ -1,6 +1,6 @@
 train = dict(
     batch_size=10,
-    num_workers=4,
+    num_workers=0,
     use_amp=True,
     num_epochs=100,
     num_iters=30000,

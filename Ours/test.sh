@@ -8,15 +8,15 @@ export CUDA_VISIBLE_DEVICES="$1"
 echo 'Excute the script on GPU: ' "$1"
 
 echo 'For COD'
-python test.py --config ./configs/zoomnet/cod_zoomnet.py \
+python test.py --config ./configs/zoomnet/zoomnet.py \
     --model-name ZoomNet \
     --batch-size 22 \
-    --load-from ./output/ForSharing/cod_zoomnet_r50_bs8_e40_2022-03-04.pth \
-    --save-path ./output/ForSharing/COD_Results
+    --load-from /home/suyoung/PycharmProjects/COD-Project/Ours/output/ZoomNet_BS8_LR0.02_E40_H384_W384_OPMsgd_OPGMfinetune_SCf3_AMP_INFOdemo/pth/state_final.pth \
+    --save-path ./output/ForSharing/COD_Results_1
 
-echo 'For SOD'
-python test.py --config ./configs/zoomnet/sod_zoomnet.py \
-    --model-name ZoomNet \
-    --batch-size 22 \
-    --load-from ./output/ForSharing/sod_zoomnet_r50_bs22_e50_2022-03-04_fixed.pth \
-    --save-path ./output/ForSharing/SOD_Results
+#echo 'For SOD'
+#python test.py --config ./configs/zoomnet/sod_zoomnet.py \
+#    --model-name ZoomNet \
+#    --batch-size 22 \
+#    --load-from ./output/ForSharing/sod_zoomnet_r50_bs22_e50_2022-03-04_fixed.pth \
+#    --save-path ./output/ForSharing/SOD_Results

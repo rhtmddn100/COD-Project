@@ -246,13 +246,13 @@
     }
   },
   "cod10k_camo_tr": {
-    "root": "/home/lart/Datasets/Saliency/COD/Train/COD10K_CAMO",
+    "root": "./TrainDataset",
     "image": {
-      "path": "Image",
+      "path": "Imgs",
       "suffix": ".jpg"
     },
     "mask": {
-      "path": "Mask",
+      "path": "GT",
       "suffix": ".png"
     },
     "edge": {
@@ -261,13 +261,13 @@
     }
   },
   "camo_te": {
-    "root": "/home/lart/Datasets/Saliency/COD/Test/CAMO",
+    "root": "./TestDataset/CAMO",
     "image": {
-      "path": "Image",
+      "path": "Imgs",
       "suffix": ".jpg"
     },
     "mask": {
-      "path": "Mask",
+      "path": "GT",
       "suffix": ".png"
     },
     "edge": {
@@ -276,13 +276,13 @@
     }
   },
   "chameleon": {
-    "root": "/home/lart/Datasets/Saliency/COD/Test/CHAMELEON",
+    "root": "./TestDataset/CHAMELEON",
     "image": {
-      "path": "Image",
+      "path": "Imgs",
       "suffix": ".jpg"
     },
     "mask": {
-      "path": "Mask",
+      "path": "GT",
       "suffix": ".png"
     },
     "edge": {
@@ -302,13 +302,13 @@
     }
   },
   "cod10k_te": {
-    "root": "/home/lart/Datasets/Saliency/COD/Test/COD10K",
+    "root": "/home/suyoung/PycharmProjects/COD-Project/Ours/TestDataset/COD10K",
     "image": {
-      "path": "Image",
+      "path": "Imgs",
       "suffix": ".jpg"
     },
     "mask": {
-      "path": "Mask",
+      "path": "GT",
       "suffix": ".png"
     },
     "edge": {
@@ -316,6 +316,7 @@
       "suffix": ".png"
     }
   },
+
   "nc4k": {
     "root": "/home/lart/Datasets/Saliency/COD/ClearnerNC4K",
     "image": {
@@ -329,6 +330,38 @@
     "instance": {
       "path": "Instance",
       "suffix": ".png"
+    }
+  },
+
+    "coco": {
+        "root": "/home/suyoung/PycharmProjects/COD-Project/Ours/TestDataset/COCO2017_screened",
+        "image": {
+            "path": "Imgs",
+            "suffix": ".jpg"
+        },
+        "mask": {
+            "path": "GT",
+            "suffix": ".png"
+        },
+        "instance": {
+            "path": "Instance",
+            "suffix": ".png"
+        }
+    },
+
+    "voc": {
+        "root": "/home/suyoung/PycharmProjects/COD-Project/Ours/TestDataset/VOC2012_screened",
+        "image": {
+          "path": "Imgs",
+          "suffix": ".jpg"
+        },
+        "mask": {
+          "path": "GT",
+          "suffix": ".png"
+        },
+        "instance": {
+          "path": "Instance",
+          "suffix": ".png"
     }
   }
 }
