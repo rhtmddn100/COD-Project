@@ -257,6 +257,7 @@ class ZoomNet(BasicModelClass):
         self.RS4 = ReverseStage(64)
         self.RS3 = ReverseStage(64)
         self.RS2 = ReverseStage(64)
+        self.RS1 = ReverseStage(64)
 
     def encoder_translayer(self, x):
         pvt = self.backbone(x)
@@ -284,20 +285,20 @@ class ZoomNet(BasicModelClass):
         x = cus_sample(x, mode="scale", factors=2) # [bs,64,24,24]
         x = self.d4(x + feats[1]) # [bs,64,24,24]
         x = cus_sample(x, mode="scale", factors=2) # [bs,64,48,48]
-        x = self.d3(x + feats[2]) # [bs,64,48,48]
-        x = cus_sample(x, mode="scale", factors=2) # [bs,64,96,96]
+        x_HMU3 = self.d3(x + feats[2]) # [bs,64,48,48]
+        x = cus_sample(x_HMU3, mode="scale", factors=2) # [bs,64,96,96]
         x = self.d2(x + feats[3]) # [bs,64,96,96]
-        # x = cus_sample(x, mode="scale", factors=2)
-        # x = self.d1(x + feats[4])
-        # x = cus_sample(x, mode="scale", factors=2)
+        x = cus_sample(x, mode="scale", factors=2)
+        x = self.d1(x + feats[4])
+        x = cus_sample(x, mode="scale", factors=2)
 
         #x = output of HMU 3
         #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x)) # [bs,1,96,96]
-        S_g_pred = F.interpolate(S_g, scale_factor=4, mode='bilinear') # [bs,1,384,384]
+        S_g = self.out_layer_01(self.out_layer_00(x_HMU3)) # [bs,1,96,96]
+        S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear') # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.125, mode='bilinear') # [bs,1,12,12]
+        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear') # [bs,1,12,12]
         ra4_feat = self.RS5(feats[0], guidance_g)
         S_5 = ra4_feat + guidance_g
         S_5_pred = F.interpolate(S_5, scale_factor=32, mode='bilinear')  # Sup-2 (bs, 1, 11, 11) -> (bs, 1, 352, 352)
@@ -320,8 +321,13 @@ class ZoomNet(BasicModelClass):
         S_2 = ra1_feat + guidance_3
         S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 88, 88) -> (bs, 1, 352, 352)
 
+        guidance_2 = F.interpolate(S_2, scale_factor=2, mode='bilinear')
+        ra0_feat = self.RS1(feats[4], guidance_2)
+        S_1 = ra0_feat + guidance_2
+        S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
+
         # return dict(seg=logits)
-        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred)
+        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
     def train_forward(self, data, **kwargs):
         assert not {"image1.5", "image1.0", "image0.5", "mask"}.difference(set(data)), set(data)
@@ -373,7 +379,7 @@ class ZoomNet(BasicModelClass):
 
             loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
 
-            if name == 'S_2':
+            if name == 'S_1':
                 ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
                 ual_loss *= ual_coef
                 losses.append(ual_loss)
