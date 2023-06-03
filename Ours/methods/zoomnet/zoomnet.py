@@ -9,6 +9,7 @@ from methods.module.base_model import BasicModelClass
 from methods.module.conv_block import ConvBNReLU
 from utils.builder import MODELS
 from utils.ops import cus_sample
+from methods.module.pvtv2 import pvt_v2_b2
 
 
 class ASPP(nn.Module):
@@ -18,16 +19,17 @@ class ASPP(nn.Module):
         self.conv2 = ConvBNReLU(in_dim, out_dim, kernel_size=3, dilation=2, padding=2)
         self.conv3 = ConvBNReLU(in_dim, out_dim, kernel_size=3, dilation=5, padding=5)
         self.conv4 = ConvBNReLU(in_dim, out_dim, kernel_size=3, dilation=7, padding=7)
-        self.conv5 = ConvBNReLU(in_dim, out_dim, kernel_size=1)
-        self.fuse = ConvBNReLU(5 * out_dim, out_dim, 3, 1, 1)
+        # self.conv5 = ConvBNReLU(in_dim, out_dim, kernel_size=1)
+        self.fuse = ConvBNReLU(4 * out_dim, out_dim, 3, 1, 1)
 
     def forward(self, x):
         conv1 = self.conv1(x)
         conv2 = self.conv2(x)
         conv3 = self.conv3(x)
         conv4 = self.conv4(x)
-        conv5 = self.conv5(cus_sample(x.mean((2, 3), keepdim=True), mode="size", factors=x.size()[2:]))
-        return self.fuse(torch.cat((conv1, conv2, conv3, conv4, conv5), 1))
+        # conv5 = self.conv5(cus_sample(x.mean((2, 3), keepdim=True), mode="size", factors=x.size()[2:]))
+        # return self.fuse(torch.cat((conv1, conv2, conv3, conv4, conv5), 1))
+        return self.fuse(torch.cat((conv1, conv2, conv3, conv4), 1))
 
 
 class TransLayer(nn.Module):
@@ -35,24 +37,24 @@ class TransLayer(nn.Module):
         super().__init__()
         self.c5_down = nn.Sequential(
             # ConvBNReLU(2048, 256, 3, 1, 1),
-            last_module(in_dim=2048, out_dim=out_c),
+            last_module(in_dim=512, out_dim=out_c),
         )
-        self.c4_down = nn.Sequential(ConvBNReLU(1024, out_c, 3, 1, 1))
-        self.c3_down = nn.Sequential(ConvBNReLU(512, out_c, 3, 1, 1))
-        self.c2_down = nn.Sequential(ConvBNReLU(256, out_c, 3, 1, 1))
-        self.c1_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
+        self.c4_down = nn.Sequential(ConvBNReLU(320, out_c, 3, 1, 1))
+        self.c3_down = nn.Sequential(ConvBNReLU(128, out_c, 3, 1, 1))
+        self.c2_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
+        # self.c1_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
 
     def forward(self, xs):
-        assert isinstance(xs, (tuple, list))
-        assert len(xs) == 5
-        c1, c2, c3, c4, c5 = xs
+        # assert isinstance(xs, (tuple, list))
+        assert len(xs) == 4
+        c2, c3, c4, c5 = xs
         c5 = self.c5_down(c5)
         c4 = self.c4_down(c4)
         c3 = self.c3_down(c3)
         c2 = self.c2_down(c2)
-        c1 = self.c1_down(c1)
-        return c5, c4, c3, c2, c1
-
+        # c1 = self.c1_down(c1)
+        # return c5, c4, c3, c2, c1
+        return c5, c4, c3, c2
 
 class SIU(nn.Module):
     def __init__(self, in_dim):
@@ -228,25 +230,42 @@ def cal_ual(seg_logits, seg_gts):
 class ZoomNet(BasicModelClass):
     def __init__(self):
         super().__init__()
-        self.shared_encoder = timm.create_model(model_name="resnet50", pretrained=True, in_chans=3, features_only=True)
+
+        # load pvt
+        self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
+        path = './pretrained_pvt/pvt_v2_b2.pth'
+        save_model = torch.load(path)
+        model_dict = self.backbone.state_dict()
+        state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
+        model_dict.update(state_dict)
+        self.backbone.load_state_dict(model_dict)
+
+        # self.shared_encoder = timm.create_model(model_name="resnet50", pretrained=True, in_chans=3, features_only=True)
         self.translayer = TransLayer(out_c=64)  # [c5, c4, c3, c2, c1]
-        self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
+        # self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
+        self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64)])
 
         self.d5 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
         self.d4 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
         self.d3 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
         self.d2 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
-        self.d1 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
+        # self.d1 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
         self.out_layer_00 = ConvBNReLU(64, 64, 3, 1, 1)
         self.out_layer_01 = nn.Conv2d(64, 1, 1)
 
         self.RS5 = ReverseStage(64)
         self.RS4 = ReverseStage(64)
         self.RS3 = ReverseStage(64)
+        self.RS2 = ReverseStage(64)
 
     def encoder_translayer(self, x):
-        en_feats = self.shared_encoder(x)
-        trans_feats = self.translayer(en_feats)
+        pvt = self.backbone(x)
+        # x1 = pvt[0]
+        # x2 = pvt[1]
+        # x3 = pvt[2]
+        # x4 = pvt[3]
+        # en_feats = self.shared_encoder(x)
+        trans_feats = self.translayer(pvt)
         return trans_feats
 
     def body(self, l_scale, m_scale, s_scale):
@@ -261,24 +280,24 @@ class ZoomNet(BasicModelClass):
         
         #feats[0:2] = outputs of SIU 3~5
 
-        x = self.d5(feats[0])
-        x = cus_sample(x, mode="scale", factors=2)
-        x = self.d4(x + feats[1])
-        x = cus_sample(x, mode="scale", factors=2)
-        x = self.d3(x + feats[2])
-       # x = cus_sample(x, mode="scale", factors=2)
-        # x = self.d2(x + feats[3])
+        x = self.d5(feats[0]) # [bs,64,12,12]
+        x = cus_sample(x, mode="scale", factors=2) # [bs,64,24,24]
+        x = self.d4(x + feats[1]) # [bs,64,24,24]
+        x = cus_sample(x, mode="scale", factors=2) # [bs,64,48,48]
+        x = self.d3(x + feats[2]) # [bs,64,48,48]
+        x = cus_sample(x, mode="scale", factors=2) # [bs,64,96,96]
+        x = self.d2(x + feats[3]) # [bs,64,96,96]
         # x = cus_sample(x, mode="scale", factors=2)
         # x = self.d1(x + feats[4])
         # x = cus_sample(x, mode="scale", factors=2)
 
         #x = output of HMU 3
         #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x))
-        S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear')
+        S_g = self.out_layer_01(self.out_layer_00(x)) # [bs,1,96,96]
+        S_g_pred = F.interpolate(S_g, scale_factor=4, mode='bilinear') # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear')
+        guidance_g = F.interpolate(S_g, scale_factor=0.125, mode='bilinear') # [bs,1,12,12]
         ra4_feat = self.RS5(feats[0], guidance_g)
         S_5 = ra4_feat + guidance_g
         S_5_pred = F.interpolate(S_5, scale_factor=32, mode='bilinear')  # Sup-2 (bs, 1, 11, 11) -> (bs, 1, 352, 352)
@@ -295,8 +314,14 @@ class ZoomNet(BasicModelClass):
         S_3 = ra2_feat + guidance_4
         S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
+        # ---- reverse stage 2 ----
+        guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
+        ra1_feat = self.RS2(feats[3], guidance_3)
+        S_2 = ra1_feat + guidance_3
+        S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 88, 88) -> (bs, 1, 352, 352)
+
         # return dict(seg=logits)
-        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred)
+        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred)
 
     def train_forward(self, data, **kwargs):
         assert not {"image1.5", "image1.0", "image0.5", "mask"}.difference(set(data)), set(data)
@@ -311,7 +336,7 @@ class ZoomNet(BasicModelClass):
             gts=data["mask"],
             iter_percentage=kwargs["curr"]["iter_percentage"],
         )
-        return dict(sal=output["S_3"].sigmoid()), loss, loss_str
+        return dict(sal=output["S_2"].sigmoid()), loss, loss_str
     
     def test_forward(self, data, **kwargs):
         output = self.body(
@@ -319,7 +344,7 @@ class ZoomNet(BasicModelClass):
             m_scale=data["image1.0"],
             s_scale=data["image0.5"],
         )
-        return output["S_3"]
+        return output["S_2"]
 
     def cal_loss(self, all_preds: dict, gts: torch.Tensor, method="cos", iter_percentage: float = 0):
         ual_coef = get_coef(iter_percentage, method)
@@ -348,21 +373,22 @@ class ZoomNet(BasicModelClass):
 
             loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
 
-            # if name == 'S_3':
-            #     ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
-            #     ual_loss *= ual_coef
-            #     losses.append(ual_loss)
-            #     loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")
-        
+            if name == 'S_2':
+                ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
+                ual_loss *= ual_coef
+                losses.append(ual_loss)
+                loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")        
         return sum(losses), " ".join(loss_str)
 
     def get_grouped_params(self):
         param_groups = {}
+        param_groups.setdefault("pretrained", [])
+        param_groups.setdefault("fixed", [])
         for name, param in self.named_parameters():
-            if name.startswith("shared_encoder.layer"):
+            if name.startswith("backbone"):
                 param_groups.setdefault("pretrained", []).append(param)
-            elif name.startswith("shared_encoder."):
-                param_groups.setdefault("fixed", []).append(param)
+            # elif name.startswith("backbone"):
+            #     param_groups.setdefault("fixed", []).append(param)
             else:
                 param_groups.setdefault("retrained", []).append(param)
         return param_groups

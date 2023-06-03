@@ -153,3 +153,7 @@ cython_debug/
 /output
 .vscode/
 
+# dataset
+TestDataset
+TrainDataset
+pretrained_pvt
