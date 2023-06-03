@@ -299,11 +299,11 @@ def training(model, cfg) -> pipeline.ModelEma:
 def main():
     cfg = parse_config()
 
-    # if not cfg.resume_from:
-    #     misc.pre_mkdir(path_config=cfg.path)
-    #     with open(cfg.path.cfg_copy, encoding="utf-8", mode="w") as f:
-    #         f.write(cfg.pretty_text)
-    #     shutil.copy(__file__, cfg.path.trainer_copy)
+    if not cfg.resume_from:
+        misc.pre_mkdir(path_config=cfg.path)
+        with open(cfg.path.cfg_copy, encoding="utf-8", mode="w") as f:
+            f.write(cfg.pretty_text)
+        shutil.copy(__file__, cfg.path.trainer_copy)
 
     cfg.tr_logger = recorder.TxtLogger(cfg.path.tr_log)
     cfg.te_logger = recorder.TxtLogger(cfg.path.te_log)
