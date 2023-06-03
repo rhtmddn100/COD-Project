@@ -318,7 +318,7 @@
   },
 
   "nc4k": {
-    "root": "/home/lart/Datasets/Saliency/COD/ClearnerNC4K",
+    "root": "/home/seungwoo/data/projects/seungwoo/COD/NC4K",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -332,7 +332,21 @@
       "suffix": ".png"
     }
   },
-
+  "coco": {
+    "root": "../../COCO2017",
+    "image": {
+      "path": "Imgs",
+      "suffix": ".jpg"
+    },
+    "mask": {
+      "path": "GT",
+      "suffix": ".png"
+    },
+    "instance": {
+      "path": "Instance",
+      "suffix": ".png"
+    }
+  },
     "coco": {
         "root": "/home/suyoung/PycharmProjects/COD-Project/Ours/TestDataset/COCO2017_screened",
         "image": {

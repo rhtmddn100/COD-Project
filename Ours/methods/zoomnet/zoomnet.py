@@ -360,17 +360,24 @@ class ZoomNet(BasicModelClass):
             weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
             # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
             w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
-            w_sod_loss = w_sod_loss.mean()
-            losses.append(w_sod_loss)
+            w_sod_loss = w_sod_loss
+            # losses.append(w_sod_loss)
 
-            loss_str.append(f"{name}_BCE: {w_sod_loss.item():.5f}")
+            preds = torch.sigmoid(preds)
+            inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
+            union = ((preds + resized_gts) * weit).sum(dim=(2, 3))
+            wiou = 1 - (inter + 1) / (union - inter + 1)
+            
+            total_loss = (w_sod_loss + wiou).mean()
+            losses.append(total_loss)
+
+            loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
 
             if name == 'S_2':
                 ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
                 ual_loss *= ual_coef
                 losses.append(ual_loss)
-                loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")
-        
+                loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")        
         return sum(losses), " ".join(loss_str)
 
     def get_grouped_params(self):
