@@ -246,7 +246,7 @@
     }
   },
   "cod10k_camo_tr": {
-    "root": "../../TrainDataset",
+    "root": "/home/sjbang/workspace/Datasets/TrainDataset",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -261,7 +261,7 @@
     }
   },
   "camo_te": {
-    "root": "../../CAMO",
+    "root": "/home/sjbang/workspace/Datasets/TestDataset/CAMO",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -276,7 +276,7 @@
     }
   },
   "chameleon": {
-    "root": "../../CHAMELEON",
+    "root": "/home/sjbang/workspace/Datasets/TestDataset/CHAMELEON",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -302,7 +302,7 @@
     }
   },
   "cod10k_te": {
-    "root": "../../COD10K",
+    "root": "/home/sjbang/workspace/Datasets/TestDataset/COD10K",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -333,7 +333,7 @@
     }
   },
   "coco": {
-    "root": "../../COCO2017",
+    "root": "/home/sjbang/workspace/BGNet/data/TestDataset/COCO",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -348,10 +348,10 @@
     }
   },
   "voc": {
-    "root": "../../VOC2012",
+    "root": "/home/sjbang/workspace/BGNet/data/TestDataset/pascalVOC",
     "image": {
       "path": "Imgs",
-      "suffix": ".png"
+      "suffix": ".jpg"
     },
     "mask": {
       "path": "GT",

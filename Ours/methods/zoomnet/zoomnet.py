@@ -135,7 +135,8 @@ class ReverseStage(nn.Module):
     def __init__(self, channel):
         super(ReverseStage, self).__init__()
         self.weak_gra = GRA(channel, channel)
-        self.medium_gra = GRA(channel, 8)
+        self.little_gra = GRA(channel, 8)
+        self.medium_gra = GRA(channel, 4)
         self.strong_gra = GRA(channel, 2)
 
     def forward(self, x, y):
@@ -144,6 +145,7 @@ class ReverseStage(nn.Module):
 
         # three group-reversal attention blocks
         x, y = self.weak_gra(x, y)
+        x, y = self.little_gra(x, y)
         x, y = self.medium_gra(x, y)
         _, y = self.strong_gra(x, y)
 
@@ -233,7 +235,7 @@ class ZoomNet(BasicModelClass):
 
         # load pvt
         self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = './pretrained_pvt/pvt_v2_b2.pth'
+        path = '/home/sjbang/workspace/COD-Project/Ours/pretrained_pvt/pvt_v2_b2.pth'
         save_model = torch.load(path)
         model_dict = self.backbone.state_dict()
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
@@ -365,6 +367,25 @@ class ZoomNet(BasicModelClass):
         for name, preds in all_preds.items():
             resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:])
 
+            ## FREEZE AREA FOR EXPERIMENT
+            # sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
+            # weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
+            # # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
+            # w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
+            # w_sod_loss = w_sod_loss
+            # # losses.append(w_sod_loss)
+
+            # preds = torch.sigmoid(preds)
+            # inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
+            # union = ((preds + resized_gts) * weit).sum(dim=(2, 3))
+            # wiou = 1 - (inter + 1) / (union - inter + 1)
+            
+            # total_loss = (w_sod_loss + wiou).mean()
+            # losses.append(total_loss)
+
+            # loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
+            ## TILL HERE
+
             sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
             weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
             # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
@@ -382,11 +403,11 @@ class ZoomNet(BasicModelClass):
 
             loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
 
-            if name == 'S_2':
-                ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
-                ual_loss *= ual_coef
-                losses.append(ual_loss)
-                loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")        
+            # if name == 'S_2':
+            #     ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
+            #     ual_loss *= ual_coef
+            #     losses.append(ual_loss)
+            #     loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")        
         return sum(losses), " ".join(loss_str)
 
     def get_grouped_params(self):
