@@ -10,9 +10,9 @@ echo 'Excute the script on GPU: ' "$1"
 echo 'For COD'
 python test.py --config ./configs/zoomnet/zoomnet.py \
     --model-name ZoomNet \
-    --batch-size 22 \
-    --load-from /home/suyoung/PycharmProjects/COD-Project/Ours/output/ZoomNet_BS8_LR0.02_E40_H384_W384_OPMsgd_OPGMfinetune_SCf3_AMP_INFOdemo/pth/state_final.pth \
-    --save-path ./output/ForSharing/COD_Results_1
+    --batch-size 16 \
+    --load-from /home/suyoung/PycharmProjects/COD-Project/Ours/output/ZoomNet_BS16_LR0.02_E100_H384_W384_OPMsgd_OPGMfinetune_SCf3_AMP_INFOdemo/pth/state_final.pth \
+    --save-path ./output/ForSharing/COD_Results_5
 
 #echo 'For SOD'
 #python test.py --config ./configs/zoomnet/sod_zoomnet.py \

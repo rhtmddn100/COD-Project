@@ -2,3 +2,9 @@ Ours/log__.txt
 Ours/log.txt
 Ours/configs/_base_/dataset/dataset_configs.json
 Ours/submit_test.sh
+Ours/dataset
+Ours/TestDataset
+Ours/TrainDataset
+Ours/pretrained_pvt
+Ours/output
+Ours/Output_Map

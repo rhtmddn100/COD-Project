@@ -59,6 +59,7 @@ class MSICOD_TrainDataset(_BaseSODDataset):
         self, root: List[Tuple[str, dict]], shape: Dict[str, int], extra_scales: List = None, interp_cfg: Dict = None
     ):
         super().__init__(base_shape=shape, extra_scales=extra_scales, interp_cfg=interp_cfg)
+        self.root = root
         self.datasets = get_datasets_info_with_keys(dataset_infos=root, extra_keys=["mask"])
         self.total_image_paths = self.datasets["image"]
         self.total_mask_paths = self.datasets["mask"]
@@ -76,7 +77,7 @@ class MSICOD_TrainDataset(_BaseSODDataset):
         mask_path = self.total_mask_paths[index]
 
         image = read_color_array(image_path)
-        mask = read_gray_array(mask_path, to_normalize=True, thr=0.5)
+        mask = read_gray_array(mask_path, to_normalize=True, thr=0.5) #(H, W)
 
         transformed = self.joint_trans(image=image, mask=mask)
         image = transformed["image"]
@@ -89,8 +90,18 @@ class MSICOD_TrainDataset(_BaseSODDataset):
         image_1_0 = torch.from_numpy(images[1]).permute(2, 0, 1)
         image_1_5 = torch.from_numpy(images[2]).permute(2, 0, 1)
 
-        mask = ss_resize(mask, scale=1.0, base_h=base_h, base_w=base_w)
-        mask_1_0 = torch.from_numpy(mask).unsqueeze(0)
+        mask = ss_resize(mask, scale=1.0, base_h=base_h, base_w=base_w) #(384, 384)
+        mask_1_0 = torch.from_numpy(mask).unsqueeze(0) #(1, 384, 384)
+        dataset_type = mask_path.split('/')[2]
+        zero_tensor = torch.zeros_like(mask_1_0)
+        if dataset_type == "cod10k_tr":
+            mask_1_0 = torch.cat((mask_1_0, zero_tensor), dim=0)
+            data_type = torch.zeros(1)
+        elif dataset_type == "ECSSD":
+            mask_1_0 = torch.cat((zero_tensor, mask_1_0), dim=0)
+            data_type = torch.ones(1)
+        else:
+            raise ValueError("dataset directory should be cod10k_tr or ECSSD")
 
         return dict(
             data={
@@ -98,6 +109,7 @@ class MSICOD_TrainDataset(_BaseSODDataset):
                 "image1.0": image_1_0,
                 "image0.5": image_0_5,
                 "mask": mask_1_0,
+                "data_type": data_type,
             }
         )
 

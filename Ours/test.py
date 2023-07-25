@@ -83,6 +83,8 @@ def test_once(
             )
         else:
             logits = model(data=batch_images)
+            # logits, indices = torch.max(model(data=batch_images), dim=1, keepdim=True)
+            logits = logits[:, 1, :, :]
         probs = logits.sigmoid().squeeze(1).cpu().detach().numpy()
 
         for i, pred in enumerate(probs):

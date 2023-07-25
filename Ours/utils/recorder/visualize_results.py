@@ -22,7 +22,7 @@ def plot_results(data_container, save_path=None):
     for subplot_id, (name, data) in enumerate(data_container.items()):
         grid = make_grid(data, nrow=data.shape[0], padding=2, normalize=False)
         grid_image = np.asarray(tv_tf.to_pil_image(grid))
-        axes[subplot_id].imshow(grid_image)
+        axes[subplot_id].imshow(grid_image[:, :, 0])
         axes[subplot_id].set_ylabel(name)
         axes[subplot_id].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 

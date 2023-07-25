@@ -86,8 +86,9 @@ def test_once(
             logits = pipeline.test_aug(
                 model=model, data=batch_images, strategy=tta_setting.strategy, reducation=tta_setting.reduction
             )
+            logits, indices = torch.max(logits, dim=1, keepdim=True)
         else:
-            logits = model(data=batch_images)
+            logits, indices = torch.max(model(data=batch_images), dim=1, keepdim=True)
         probs = logits.sigmoid().squeeze(1).cpu().detach().numpy()
 
         for i, pred in enumerate(probs):
@@ -333,6 +334,8 @@ def main():
 
     model.device = "cuda:0"
     model.to(model.device)
+    # device = torch.device("cuda")
+    # model = torch.nn.DataParallel(model, device_ids=[0,1], output_device=0).to(device)
 
     if cfg.load_from:
         model_ema = io.load_weight(model=model, load_path=cfg.load_from)

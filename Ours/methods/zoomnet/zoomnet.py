@@ -56,6 +56,7 @@ class TransLayer(nn.Module):
         # return c5, c4, c3, c2, c1
         return c5, c4, c3, c2
 
+
 class SIU(nn.Module):
     def __init__(self, in_dim):
         super().__init__()
@@ -92,14 +93,15 @@ class SIU(nn.Module):
             return lms, dict(attn_l=attn_l, attn_m=attn_m, attn_s=attn_s, l=l, m=m, s=s)
         return lms
 
+
 class GRA(nn.Module):
     def __init__(self, channel, subchannel):
         super(GRA, self).__init__()
-        self.group = channel//subchannel
+        self.group = channel // subchannel
         self.conv = nn.Sequential(
-            nn.Conv2d(channel + self.group, channel, 3, padding=1), nn.ReLU(True),
+            nn.Conv2d(channel + self.group * 2, channel, 3, padding=1), nn.ReLU(True),
         )
-        self.score = nn.Conv2d(channel, 1, 3, padding=1)
+        self.score = nn.Conv2d(channel, 2, 3, padding=1)
 
     def forward(self, x, y):
         if self.group == 1:
@@ -116,13 +118,15 @@ class GRA(nn.Module):
         elif self.group == 16:
             xs = torch.chunk(x, 16, dim=1)
             x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y,
-            xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y), 1)
+                               xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y),
+                              1)
         elif self.group == 32:
             xs = torch.chunk(x, 32, dim=1)
             x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y,
-            xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y,
-            xs[16], y, xs[17], y, xs[18], y, xs[19], y, xs[20], y, xs[21], y, xs[22], y, xs[23], y,
-            xs[24], y, xs[25], y, xs[26], y, xs[27], y, xs[28], y, xs[29], y, xs[30], y, xs[31], y), 1)
+                               xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y,
+                               xs[16], y, xs[17], y, xs[18], y, xs[19], y, xs[20], y, xs[21], y, xs[22], y, xs[23], y,
+                               xs[24], y, xs[25], y, xs[26], y, xs[27], y, xs[28], y, xs[29], y, xs[30], y, xs[31], y),
+                              1)
         else:
             raise Exception("Invalid Channel")
 
@@ -130,6 +134,7 @@ class GRA(nn.Module):
         y = y + self.score(x)
 
         return x, y
+
 
 class ReverseStage(nn.Module):
     def __init__(self, channel):
@@ -141,6 +146,7 @@ class ReverseStage(nn.Module):
 
     def forward(self, x, y):
         # reverse guided block
+        # y, index = torch.max(y, dim=1, keepdim=True)
         y = -1 * (torch.sigmoid(y)) + 1
 
         # three group-reversal attention blocks
@@ -150,6 +156,7 @@ class ReverseStage(nn.Module):
         _, y = self.strong_gra(x, y)
 
         return y
+
 
 class HMU(nn.Module):
     def __init__(self, in_c, num_groups=4, hidden_dim=None):
@@ -197,6 +204,46 @@ class HMU(nn.Module):
         out = self.fuse(out * gate)
         return self.final_relu(out + x)
 
+##########################################################################
+## Channel Attention Layer
+class CALayer(nn.Module):
+    def __init__(self, channel, reduction=16, bias=False):
+        super(CALayer, self).__init__()
+        # global average pooling: feature --> point
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # feature channel downscale and upscale --> channel weight
+        self.conv_du = nn.Sequential(
+            nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=bias),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=bias),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        y = self.avg_pool(x)
+        y = self.conv_du(y)
+        return x * y
+
+
+##########################################################################
+## Channel Attention Block (CAB)
+class CAB(nn.Module):
+    def __init__(self, n_feat, kernel_size, reduction, bias, act):
+        super(CAB, self).__init__()
+        modules_body = []
+        modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=False, stride=1))
+        modules_body.append(act)
+        modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=False, stride=1))
+
+        self.CA = CALayer(n_feat, reduction, bias=bias)
+        self.body = nn.Sequential(*modules_body)
+
+    def forward(self, x):
+        res = self.body(x)
+        res = self.CA(res)
+        res += x
+        return res
+
 
 def get_coef(iter_percentage, method):
     if method == "linear":
@@ -235,7 +282,7 @@ class ZoomNet(BasicModelClass):
 
         # load pvt
         self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = '/home/sjbang/workspace/COD-Project/Ours/pretrained_pvt/pvt_v2_b2.pth'
+        path = './pretrained_pvt/pvt_v2_b2.pth'
         save_model = torch.load(path)
         model_dict = self.backbone.state_dict()
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
@@ -247,13 +294,16 @@ class ZoomNet(BasicModelClass):
         # self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
         self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
 
-        self.d5 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
-        self.d4 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
-        self.d3 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
-        self.d2 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
-        # self.d1 = nn.Sequential(HMU(64, num_groups=6, hidden_dim=32))
+        self.d5 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
+        self.d4 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
+        self.d3 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
+        self.d2 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
+        self.d5 = nn.Sequential(*self.d5)
+        self.d4 = nn.Sequential(*self.d4)
+        self.d3 = nn.Sequential(*self.d3)
+        self.d2 = nn.Sequential(*self.d2)
         self.out_layer_00 = ConvBNReLU(64, 64, 3, 1, 1)
-        self.out_layer_01 = nn.Conv2d(64, 1, 1)
+        self.out_layer_01 = nn.Conv2d(64, 2, 1)
 
         self.RS5 = ReverseStage(64)
         self.RS4 = ReverseStage(64)
@@ -280,42 +330,42 @@ class ZoomNet(BasicModelClass):
         for l, m, s, layer in zip(l_trans_feats, m_trans_feats, s_trans_feats, self.merge_layers):
             siu_outs = layer(l=l, m=m, s=s)
             feats.append(siu_outs)
-        
-        #feats[0:2] = outputs of SIU 3~5
 
-        x = self.d5(feats[0]) # [bs,64,12,12]
-        x = cus_sample(x, mode="scale", factors=2) # [bs,64,24,24]
-        x = self.d4(x + feats[1]) # [bs,64,24,24]
-        x = cus_sample(x, mode="scale", factors=2) # [bs,64,48,48]
-        x_HMU3 = self.d3(x + feats[2]) # [bs,64,48,48]
-        # x = cus_sample(x_HMU3, mode="scale", factors=2) # [bs,64,96,96]
-        # x = self.d2(x + feats[3]) # [bs,64,96,96]
+        # feats[0:2] = outputs of SIU 3~5
+
+        x1 = self.d5(feats[0])  # [bs,64,12,12]
+        x2 = cus_sample(x1, mode="scale", factors=2)  # [bs,64,24,24]
+        x2 = self.d4(x2 + feats[1])  # [bs,64,24,24]
+        x3 = cus_sample(x2, mode="scale", factors=2)  # [bs,64,48,48]
+        x3 = self.d3(x3 + feats[2])  # [bs,64,48,48]
+        # x4 = cus_sample(x3, mode="scale", factors=2) # [bs,64,96,96]
+        # x4 = self.d2(x4 + feats[3]) # [bs,64,96,96]
         # x = cus_sample(x, mode="scale", factors=2)
         # # x = self.d1(x + feats[4])
         # # x = cus_sample(x, mode="scale", factors=2)
 
-        #x = output of HMU 3
-        #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x_HMU3)) # [bs,1,96,96]
-        S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear') # [bs,1,384,384]
+        # x = output of HMU 3
+        # coarse map
+        S_g = self.out_layer_01(self.out_layer_00(x3))  # [bs,2,48,48]
+        S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear')  # [bs,2,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear') # [bs,1,12,12]
-        ra4_feat = self.RS5(feats[0], guidance_g)
+        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear')  # [bs,2,12,12]
+        ra4_feat = self.RS5(x1, guidance_g)
         S_5 = ra4_feat + guidance_g
         S_5_pred = F.interpolate(S_5, scale_factor=32, mode='bilinear')  # Sup-2 (bs, 1, 11, 11) -> (bs, 1, 352, 352)
 
         # ---- reverse stage 4 ----
         guidance_5 = F.interpolate(S_5, scale_factor=2, mode='bilinear')
-        ra3_feat = self.RS4(feats[1], guidance_5)
+        ra3_feat = self.RS4(x2, guidance_5)
         S_4 = ra3_feat + guidance_5
         S_4_pred = F.interpolate(S_4, scale_factor=16, mode='bilinear')  # Sup-3 (bs, 1, 22, 22) -> (bs, 1, 352, 352)
 
         # ---- reverse stage 3 ----
         guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
-        ra2_feat = self.RS3(feats[2], guidance_4)
+        ra2_feat = self.RS3(x3, guidance_4)
         S_3 = ra2_feat + guidance_4
-        S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
+        S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')  # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
         # ---- reverse stage 2 ----
         guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
@@ -335,7 +385,7 @@ class ZoomNet(BasicModelClass):
         # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
     def train_forward(self, data, **kwargs):
-        assert not {"image1.5", "image1.0", "image0.5", "mask"}.difference(set(data)), set(data)
+        assert not {"image1.5", "image1.0", "image0.5", "mask", "data_type"}.difference(set(data)), set(data)
 
         output = self.body(
             l_scale=data["image1.5"],
@@ -345,10 +395,11 @@ class ZoomNet(BasicModelClass):
         loss, loss_str = self.cal_loss(
             all_preds=output,
             gts=data["mask"],
+            data_type=data["data_type"],
             iter_percentage=kwargs["curr"]["iter_percentage"],
         )
         return dict(sal=output["S_2"].sigmoid()), loss, loss_str
-    
+
     def test_forward(self, data, **kwargs):
         output = self.body(
             l_scale=data["image1.5"],
@@ -357,15 +408,15 @@ class ZoomNet(BasicModelClass):
         )
         return output["S_2"]
 
-    def cal_loss(self, all_preds: dict, gts: torch.Tensor, method="cos", iter_percentage: float = 0):
+    def cal_loss(self, all_preds: dict, gts: torch.Tensor, data_type: torch.Tensor, method="cos", iter_percentage: float = 0):
         ual_coef = get_coef(iter_percentage, method)
 
         losses = []
         loss_str = []
         # for main
-        #loss function: weighted BCE for each layer + ual loss for the last layer
+        # loss function: weighted BCE for each layer + ual loss for the last layer
         for name, preds in all_preds.items():
-            resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:])
+            resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:]) # (16, 2, 384, 384)
 
             ## FREEZE AREA FOR EXPERIMENT
             # sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
@@ -379,25 +430,29 @@ class ZoomNet(BasicModelClass):
             # inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
             # union = ((preds + resized_gts) * weit).sum(dim=(2, 3))
             # wiou = 1 - (inter + 1) / (union - inter + 1)
-            
+
             # total_loss = (w_sod_loss + wiou).mean()
             # losses.append(total_loss)
 
             # loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
-            ## TILL HERE
+            expanded_data_type = data_type.unsqueeze(-1).unsqueeze(-1)  # (bs, 1, 1, 1)
+            expanded_data_type = expanded_data_type.expand(-1, -1, preds.shape[2], preds.shape[3])  # (bs, 1, 384, 384)
+            expanded_data_type = expanded_data_type.long()
+
+            preds = torch.gather(preds, 1, expanded_data_type)
+            resized_gts = torch.gather(resized_gts, 1, expanded_data_type)
 
             sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
             weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
             # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
             w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
-            w_sod_loss = w_sod_loss
             # losses.append(w_sod_loss)
 
             preds = torch.sigmoid(preds)
             inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
             union = ((preds + resized_gts) * weit).sum(dim=(2, 3))
             wiou = 1 - (inter + 1) / (union - inter + 1)
-            
+
             total_loss = (w_sod_loss + wiou).mean()
             losses.append(total_loss)
 
@@ -407,7 +462,7 @@ class ZoomNet(BasicModelClass):
             #     ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
             #     ual_loss *= ual_coef
             #     losses.append(ual_loss)
-            #     loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")        
+            #     loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")
         return sum(losses), " ".join(loss_str)
 
     def get_grouped_params(self):
