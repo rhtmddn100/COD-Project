@@ -329,7 +329,7 @@
   },
 
   "nc4k": {
-    "root": "/home/seungwoo/data/projects/seungwoo/COD/NC4K",
+    "root": "./TestDataset/NC4K",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"

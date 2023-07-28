@@ -338,8 +338,8 @@ class ZoomNet(BasicModelClass):
         x2 = self.d4(x2 + feats[1])  # [bs,64,24,24]
         x3 = cus_sample(x2, mode="scale", factors=2)  # [bs,64,48,48]
         x3 = self.d3(x3 + feats[2])  # [bs,64,48,48]
-        # x4 = cus_sample(x3, mode="scale", factors=2) # [bs,64,96,96]
-        # x4 = self.d2(x4 + feats[3]) # [bs,64,96,96]
+        x4 = cus_sample(x3, mode="scale", factors=2) # [bs,64,96,96]
+        x4 = self.d2(x4 + feats[3]) # [bs,64,96,96]
         # x = cus_sample(x, mode="scale", factors=2)
         # # x = self.d1(x + feats[4])
         # # x = cus_sample(x, mode="scale", factors=2)
@@ -369,7 +369,7 @@ class ZoomNet(BasicModelClass):
 
         # ---- reverse stage 2 ----
         guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
-        ra1_feat = self.RS2(feats[3], guidance_3)
+        ra1_feat = self.RS2(x4, guidance_3)
         S_2 = ra1_feat + guidance_3
         S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 88, 88) -> (bs, 1, 352, 352)
 
@@ -418,23 +418,7 @@ class ZoomNet(BasicModelClass):
         for name, preds in all_preds.items():
             resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:]) # (16, 2, 384, 384)
 
-            ## FREEZE AREA FOR EXPERIMENT
-            # sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
-            # weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
-            # # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
-            # w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
-            # w_sod_loss = w_sod_loss
-            # # losses.append(w_sod_loss)
 
-            # preds = torch.sigmoid(preds)
-            # inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
-            # union = ((preds + resized_gts) * weit).sum(dim=(2, 3))
-            # wiou = 1 - (inter + 1) / (union - inter + 1)
-
-            # total_loss = (w_sod_loss + wiou).mean()
-            # losses.append(total_loss)
-
-            # loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
             expanded_data_type = data_type.unsqueeze(-1).unsqueeze(-1)  # (bs, 1, 1, 1)
             expanded_data_type = expanded_data_type.expand(-1, -1, preds.shape[2], preds.shape[3])  # (bs, 1, 384, 384)
             expanded_data_type = expanded_data_type.long()
@@ -444,25 +428,23 @@ class ZoomNet(BasicModelClass):
 
             sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
             weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
-            # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
             w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
-            # losses.append(w_sod_loss)
 
             preds = torch.sigmoid(preds)
             inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
             union = ((preds + resized_gts) * weit).sum(dim=(2, 3))
             wiou = 1 - (inter + 1) / (union - inter + 1)
 
+            loss_weight = torch.where(data_type == 1, torch.tensor(4.0, device=data_type.device),
+                                      torch.tensor(1.0, device=data_type.device))
+            w_sod_loss = w_sod_loss * loss_weight
+            wiou = wiou * loss_weight
+
             total_loss = (w_sod_loss + wiou).mean()
             losses.append(total_loss)
 
             loss_str.append(f"{name}_wBCE+wIOU: {total_loss.item():.5f}")
 
-            # if name == 'S_2':
-            #     ual_loss = cal_ual(seg_logits=preds, seg_gts=resized_gts)
-            #     ual_loss *= ual_coef
-            #     losses.append(ual_loss)
-            #     loss_str.append(f"{name}_UAL_{ual_coef:.5f}: {ual_loss.item():.5f}")
         return sum(losses), " ".join(loss_str)
 
     def get_grouped_params(self):
