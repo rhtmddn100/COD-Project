@@ -10,7 +10,7 @@ use_custom_worker_init = False
 model_name = "ZoomNet"
 
 train = dict(
-    batch_size=8,
+    batch_size=16,
     num_workers=4,
     use_amp=True,
     num_epochs=100,
