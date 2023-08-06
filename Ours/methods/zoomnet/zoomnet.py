@@ -305,6 +305,7 @@ class ZoomNet(BasicModelClass):
         self.RS3 = ReverseStage(64)
         self.RS2 = ReverseStage(64)
         # self.RS1 = ReverseStage(64)
+        self.RS1 = GRA(1, 1)
 
     def encoder_translayer(self, x):
         pvt = self.backbone(x)
@@ -360,7 +361,8 @@ class ZoomNet(BasicModelClass):
         S_4_pred = F.interpolate(S_4, scale_factor=16, mode='bilinear')  # Sup-3 (bs, 1, 22, 22) -> (bs, 1, 352, 352)
 
         # ---- reverse stage 3 ----
-        guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
+       # guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
+        guidance_4 = S_g
         ra2_feat = self.RS3(x3, guidance_4)
         S_3 = ra2_feat + guidance_4
         S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
@@ -371,6 +373,13 @@ class ZoomNet(BasicModelClass):
         S_2 = ra1_feat + guidance_3
         S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 88, 88) -> (bs, 1, 352, 352)
 
+        # # ---- decoder type d ---- #seperate decoding of high&low level feaures
+        high_map = F.interpolate(S_4, scale_factor=4, mode='bilinear')
+        low_map = S_2
+        _, final_map = self.RS1(low_map, high_map)
+        S_1_pred = F.interpolate(final_map, scale_factor=4, mode='bilinear')
+
+
         # # ---- reverse stage 1 ----
         # guidance_2 = F.interpolate(S_2, scale_factor=2, mode='bilinear')
         # ra0_feat = self.RS1(feats[4], guidance_2)
@@ -378,9 +387,9 @@ class ZoomNet(BasicModelClass):
         # S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
         # return dict(seg=logits)
-        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred)
+     #   return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred)
 
-        # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
+        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
     def train_forward(self, data, **kwargs):
         assert not {"image1.0", "image1.5", "image2.0", "mask"}.difference(set(data)), set(data)
