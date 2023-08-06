@@ -33,16 +33,24 @@ class MSICOD_TestDataset(_BaseSODDataset):
 
         base_h = self.base_shape["h"]
         base_w = self.base_shape["w"]
-        images = ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
-        image_0_5 = torch.from_numpy(images[0]).permute(2, 0, 1)
-        image_1_0 = torch.from_numpy(images[1]).permute(2, 0, 1)
-        image_1_5 = torch.from_numpy(images[2]).permute(2, 0, 1)
+        ###
+        # images = ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
+        # image_0_5 = torch.from_numpy(images[0]).permute(2, 0, 1)
+        # image_1_0 = torch.from_numpy(images[1]).permute(2, 0, 1)
+        # image_1_5 = torch.from_numpy(images[2]).permute(2, 0, 1)
+        images = ms_resize(image, scales=(1.0, 1.5, 2.0), base_h=base_h, base_w=base_w)
+        image_1_0 = torch.from_numpy(images[0]).permute(2, 0, 1)
+        image_1_5 = torch.from_numpy(images[1]).permute(2, 0, 1)
+        image_2_0 = torch.from_numpy(images[2]).permute(2, 0, 1)
 
         return dict(
             data={
-                "image1.5": image_1_5,
+                # "image1.5": image_1_5,
+                # "image1.0": image_1_0,
+                # "image0.5": image_0_5,
                 "image1.0": image_1_0,
-                "image0.5": image_0_5,
+                "image1.5": image_1_5,
+                "image2.0": image_2_0,
             },
             info=dict(
                 mask_path=mask_path,
@@ -84,19 +92,27 @@ class MSICOD_TrainDataset(_BaseSODDataset):
 
         base_h = self.base_shape["h"]
         base_w = self.base_shape["w"]
-        images = ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
-        image_0_5 = torch.from_numpy(images[0]).permute(2, 0, 1)
-        image_1_0 = torch.from_numpy(images[1]).permute(2, 0, 1)
-        image_1_5 = torch.from_numpy(images[2]).permute(2, 0, 1)
+        ###
+        # images = ms_resize(image, scales=(0.5, 1.0, 1.5), base_h=base_h, base_w=base_w)
+        # image_0_5 = torch.from_numpy(images[0]).permute(2, 0, 1)
+        # image_1_0 = torch.from_numpy(images[1]).permute(2, 0, 1)
+        # image_1_5 = torch.from_numpy(images[2]).permute(2, 0, 1)
+        images = ms_resize(image, scales=(1.0, 1.5, 2.0), base_h=base_h, base_w=base_w)
+        image_1_0 = torch.from_numpy(images[0]).permute(2, 0, 1)
+        image_1_5 = torch.from_numpy(images[1]).permute(2, 0, 1)
+        image_2_0 = torch.from_numpy(images[2]).permute(2, 0, 1)
 
         mask = ss_resize(mask, scale=1.0, base_h=base_h, base_w=base_w)
         mask_1_0 = torch.from_numpy(mask).unsqueeze(0)
 
         return dict(
             data={
-                "image1.5": image_1_5,
+                # "image1.5": image_1_5,
+                # "image1.0": image_1_0,
+                # "image0.5": image_0_5,
                 "image1.0": image_1_0,
-                "image0.5": image_0_5,
+                "image1.5": image_1_5,
+                "image2.0": image_2_0,
                 "mask": mask_1_0,
             }
         )

@@ -59,37 +59,39 @@ class TransLayer(nn.Module):
 class SIU(nn.Module):
     def __init__(self, in_dim):
         super().__init__()
+        self.conv_s = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
+        self.conv_m_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
+        self.conv_m_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
         self.conv_l_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
         self.conv_l_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.conv_m = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.conv_s_pre_up = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.conv_s_post_up = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.trans = nn.Sequential(
-            ConvBNReLU(3 * in_dim, in_dim, 1),
-            ConvBNReLU(in_dim, in_dim, 3, 1, 1),
-            ConvBNReLU(in_dim, in_dim, 3, 1, 1),
-            nn.Conv2d(in_dim, 3, 1),
-        )
+        self.trans = nn.Sequential(                                                                        ###
+            ConvBNReLU(3 * in_dim, in_dim, 1),                                                             ###
+            ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
+            ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
+            nn.Conv2d(in_dim, 3, 1),                                                                       ###
+        )                                                                                                  ###
 
     def forward(self, l, m, s, return_feats=False):
-        """l,m,s表示大中小三个尺度，最终会被整合到m这个尺度上"""
-        tgt_size = m.shape[2:]
-        # 尺度缩小
+        # x 1.0
+        # s = self.conv_m(s)
+        s = self.conv_s(s)
+
+        tgt_size = s.shape[2:]
+        # x 1.5
+        m = self.conv_m_pre_down(m)
+        m = F.adaptive_max_pool2d(m, tgt_size) + F.adaptive_avg_pool2d(m, tgt_size)
+        m = self.conv_m_post_down(m)
+        # x 2.0
         l = self.conv_l_pre_down(l)
         l = F.adaptive_max_pool2d(l, tgt_size) + F.adaptive_avg_pool2d(l, tgt_size)
         l = self.conv_l_post_down(l)
-        # 尺度不变
-        m = self.conv_m(m)
-        # 尺度增加(这里使用上采样之后卷积的策略)
-        s = self.conv_s_pre_up(s)
-        s = cus_sample(s, mode="size", factors=m.shape[2:])
-        s = self.conv_s_post_up(s)
-        attn = self.trans(torch.cat([l, m, s], dim=1))
-        attn_l, attn_m, attn_s = torch.softmax(attn, dim=1).chunk(3, dim=1)
-        lms = attn_l * l + attn_m * m + attn_s * s
+
+        attn = self.trans(torch.cat([s, m, l], dim=1))                                                     ###
+        attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)                                ###
+        lms = attn_s * s + attn_m * m + attn_l * l                                                         ###
 
         if return_feats:
-            return lms, dict(attn_l=attn_l, attn_m=attn_m, attn_s=attn_s, l=l, m=m, s=s)
+            return lms, dict(attn_s=attn_s, attn_m=attn_m, attn_l=attn_l, s=s, m=m, l=l)
         return lms
 
 class GRA(nn.Module):
@@ -314,14 +316,17 @@ class ZoomNet(BasicModelClass):
         trans_feats = self.translayer(pvt)
         return trans_feats
 
-    def body(self, l_scale, m_scale, s_scale):
-        l_trans_feats = self.encoder_translayer(l_scale)
-        m_trans_feats = self.encoder_translayer(m_scale)
-        s_trans_feats = self.encoder_translayer(s_scale)
+    def body(self, s_scale, m_scale, l_scale):
+        # shape => s_scale: [2,3,384,384], m_scale: [2,3,576,576], l_scale: [2,3,768,768]
+        # s_trans_feats (tuple type) : 0:[2,64,12,12}, 1:[2,64,24,24], 2:[2,64,48,48], 3:[2,64,96,96]
+        # m_trans_feats (tuple type) : 0:[2,64,18,18}, 1:[2,64,36,36], 2:[2,64,72,72], 3:[2,64,144,144]
+        s_trans_feats = self.encoder_translayer(s_scale) # x1.0
+        m_trans_feats = self.encoder_translayer(m_scale) # x1.5
+        l_trans_feats = self.encoder_translayer(l_scale) # x2.0
 
         feats = []
-        for l, m, s, layer in zip(l_trans_feats, m_trans_feats, s_trans_feats, self.merge_layers):
-            siu_outs = layer(l=l, m=m, s=s)
+        for s, m, l, layer in zip(s_trans_feats, m_trans_feats, l_trans_feats, self.merge_layers):
+            siu_outs = layer(s=s, m=m, l=l)
             feats.append(siu_outs)
         
         #feats[0:2] = outputs of SIU 3~5
@@ -378,12 +383,12 @@ class ZoomNet(BasicModelClass):
         # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
     def train_forward(self, data, **kwargs):
-        assert not {"image1.5", "image1.0", "image0.5", "mask"}.difference(set(data)), set(data)
+        assert not {"image1.0", "image1.5", "image2.0", "mask"}.difference(set(data)), set(data)
 
         output = self.body(
-            l_scale=data["image1.5"],
-            m_scale=data["image1.0"],
-            s_scale=data["image0.5"],
+            s_scale=data["image1.0"],
+            m_scale=data["image1.5"],
+            l_scale=data["image2.0"],
         )
         loss, loss_str = self.cal_loss(
             all_preds=output,
@@ -394,9 +399,9 @@ class ZoomNet(BasicModelClass):
     
     def test_forward(self, data, **kwargs):
         output = self.body(
-            l_scale=data["image1.5"],
-            m_scale=data["image1.0"],
-            s_scale=data["image0.5"],
+            s_scale=data["image1.0"],
+            m_scale=data["image1.5"],
+            l_scale=data["image2.0"],
         )
         return output["S_2"]
 
