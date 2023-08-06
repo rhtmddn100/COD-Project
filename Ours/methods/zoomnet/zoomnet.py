@@ -300,6 +300,11 @@ class ZoomNet(BasicModelClass):
         self.out_layer_00 = ConvBNReLU(64, 64, 3, 1, 1)
         self.out_layer_01 = nn.Conv2d(64, 1, 1)
 
+        self.combi_layer_5 = ConvBNReLU(128, 64, 3, 1, 1)
+        self.combi_layer_4 = ConvBNReLU(192, 64, 3, 1, 1)
+        self.combi_layer_3 = ConvBNReLU(192, 64, 3, 1, 1)
+        self.combi_layer_2 = ConvBNReLU(128, 64, 3, 1, 1)
+
         self.RS5 = ReverseStage(64)
         self.RS4 = ReverseStage(64)
         self.RS3 = ReverseStage(64)
@@ -344,32 +349,40 @@ class ZoomNet(BasicModelClass):
 
         #x = output of HMU 3
         #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x3)) # [bs,1,96,96]
+        S_g = self.out_layer_01(self.out_layer_00(x3)) # [bs,1,48,48]
         S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear') # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear') # [bs,1,12,12]
-        ra4_feat = self.RS5(x1, guidance_g)
-        S_5 = ra4_feat + guidance_g
-        S_5_pred = F.interpolate(S_5, scale_factor=32, mode='bilinear')  # Sup-2 (bs, 1, 11, 11) -> (bs, 1, 352, 352)
+        guidance_g = F.interpolate(S_g, scale_factor=0.5, mode='bilinear') # [bs,1,24,24]
+        combi_5 = torch.cat((cus_sample(x1, mode="scale", factors=2), x2), 1) # [bs,128,24,24]
+        combi_5 = self.combi_layer_5(combi_5) # [bs,64,24,24]
+        ra4_feat = self.RS5(combi_5, guidance_g)
+        S_5 = ra4_feat
+        S_5_pred = F.interpolate(S_5, scale_factor=16, mode='bilinear')  # Sup-2 (bs, 1, 24, 24) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 4 ----
         guidance_5 = F.interpolate(S_5, scale_factor=2, mode='bilinear')
-        ra3_feat = self.RS4(x2, guidance_5)
+        combi_4 = torch.cat((cus_sample(x1, mode="scale", factors=4), cus_sample(x2, mode="scale", factors=2), x3), 1) # [bs,192,48,48]
+        combi_4 = self.combi_layer_4(combi_4) # [bs,64,48,48]
+        ra3_feat = self.RS4(combi_4, guidance_5)
         S_4 = ra3_feat + guidance_5
-        S_4_pred = F.interpolate(S_4, scale_factor=16, mode='bilinear')  # Sup-3 (bs, 1, 22, 22) -> (bs, 1, 352, 352)
+        S_4_pred = F.interpolate(S_4, scale_factor=8, mode='bilinear')  # Sup-3 (bs, 1, 48, 48) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 3 ----
         guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
-        ra2_feat = self.RS3(x3, guidance_4)
+        combi_3 = torch.cat((cus_sample(x2, mode="scale", factors=4), cus_sample(x3, mode="scale", factors=2), x4), 1) # [bs,192,96,96]
+        combi_3 = self.combi_layer_3(combi_3) # [bs,64,96,96]
+        ra2_feat = self.RS3(combi_3, guidance_4)
         S_3 = ra2_feat + guidance_4
-        S_3_pred = F.interpolate(S_3, scale_factor=8, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
+        S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 2 ----
-        guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
+        guidance_3 = F.interpolate(S_3, scale_factor=1, mode='bilinear')
+        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=2), x4), 1) # [bs,192,96,96]
+        combi_2 = self.combi_layer_2(combi_2) # [bs,64,96,96]
         ra1_feat = self.RS2(x4, guidance_3)
         S_2 = ra1_feat + guidance_3
-        S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 88, 88) -> (bs, 1, 352, 352)
+        S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
         # # ---- reverse stage 1 ----
         # guidance_2 = F.interpolate(S_2, scale_factor=2, mode='bilinear')
