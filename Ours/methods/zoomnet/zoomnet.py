@@ -337,6 +337,13 @@ class ZoomNet(BasicModelClass):
      #   self.RS1 = GRA(1,1)
 
         ##Third Decoder##
+        self.final_comb_5 = GRA(1,1)
+        self.final_comb_4 = GRA(1,1)
+        self.final_comb_3 = GRA(1,1)
+        self.final_comb_2 = GRA(1,1)
+
+
+        '''
         self.final_comb_5 = nn.Sequential(
 		    ConvBNReLU(2, 1, kernel_size=1),
 			ConvBNReLU(1, 1, kernel_size=1) )
@@ -349,7 +356,7 @@ class ZoomNet(BasicModelClass):
         self.final_comb_2 = nn.Sequential(
 		    ConvBNReLU(2, 1, kernel_size=1),
 			ConvBNReLU(1, 1, kernel_size=1))
-
+        '''
 
     def encoder_translayer(self, x):
         pvt = self.backbone(x)
@@ -446,22 +453,22 @@ class ZoomNet(BasicModelClass):
         # S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
         S_2_map = F.interpolate(S_2, scale_factor=0.25, mode='bilinear') 
-        S_5 = torch.cat((S_2_map, S_5),1)
-        S_5 = self.final_comb_5(S_5)
+       # S_5 = torch.cat((S_2_map, S_5),1)
+        S_5 = self.final_comb_5(S_2_map, S_5)
         S_5_pred = F.interpolate(S_5, scale_factor=16, mode='bilinear')
         
         S_5 = F.interpolate(S_5, scale_factor=2, mode='bilinear')
-        S_4 = torch.cat((S_5, S_4),1)
-        S_4 = self.final_comb_4(S_4)
+      #  S_4 = torch.cat((S_5, S_4),1)
+        S_4 = self.final_comb_4(S_5, S_4)
         S_4_pred = F.interpolate(S_4, scale_factor=8, mode='bilinear')
 
         S_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
-        S_3 = torch.cat((S_4, S_3),1)
-        S_3 = self.final_comb_3(S_3)
+      #  S_3 = torch.cat((S_4, S_3),1)
+        S_3 = self.final_comb_3(S_4, S_3)
         S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')
 
-        S_2 = torch.cat((S_3, S_2),1)
-        S_2 = self.final_comb_2(S_2)
+       # S_2 = torch.cat((S_3, S_2),1)
+        S_2 = self.final_comb_2(S_3, S_2)
         S_1_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')
 
         # return dict(seg=logits)
@@ -559,7 +566,6 @@ class ZoomNet(BasicModelClass):
             else:
                 param_groups.setdefault("retrained", []).append(param)
         return param_groups
-
 
 @MODELS.register()
 class ZoomNet_CK(ZoomNet):
