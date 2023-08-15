@@ -12,7 +12,7 @@ train = dict(
         group_mode="r3",  # ['trick', 'r3', 'all', 'finetune'],
         cfg=dict(),
     ),
-    grad_acc_step=2,  # gradient accumulation
+    grad_acc_step=1,  # gradient accumulation
     sche_usebatch=True,
     scheduler=dict(
         warmup=dict(

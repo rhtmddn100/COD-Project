@@ -301,7 +301,7 @@ class ZoomNet(BasicModelClass):
 
         # load pvt
         self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = '/home/joopyohong/COD-Project/Ours/pretrained_pvt/pvt_v2_b2.pth'
+        path = './pretrained_pvt/pvt_v2_b2.pth'
         save_model = torch.load(path)
         model_dict = self.backbone.state_dict()
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
@@ -406,7 +406,7 @@ class ZoomNet(BasicModelClass):
         ra4_feat = self.RS5(combi_5, guidance_g)
         S_5 = ra4_feat + guidance_g      # 여기만 바꿔봄!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # S_5 = ra4_feat                 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-       # S_5_pred = F.interpolate(S_5, scale_factor=16, mode='bilinear')  # Sup-2 (bs, 1, 24, 24) -> (bs, 1, 384, 384)
+        S_5_pred = F.interpolate(S_5, scale_factor=16, mode='bilinear')  # Sup-2 (bs, 1, 24, 24) -> (bs, 1, 384, 384)
 
 
         # print(f'x1 shape: {x1.shape}')
@@ -420,7 +420,7 @@ class ZoomNet(BasicModelClass):
         combi_4 = self.combi_layer_4(combi_4) # [bs,64,48,48]
         ra3_feat = self.RS4(combi_4, guidance_5)
         S_4 = ra3_feat + guidance_5
-      #  S_4_pred = F.interpolate(S_4, scale_factor=8, mode='bilinear')  # Sup-3 (bs, 1, 48, 48) -> (bs, 1, 384, 384)
+        S_4_pred = F.interpolate(S_4, scale_factor=8, mode='bilinear')  # Sup-3 (bs, 1, 48, 48) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 3 ----
         guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
@@ -428,7 +428,7 @@ class ZoomNet(BasicModelClass):
         combi_3 = self.combi_layer_3(combi_3) # [bs,64,96,96]
         ra2_feat = self.RS3(combi_3, guidance_4)
         S_3 = ra2_feat + guidance_4
-      #  S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
+        S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 2 ----
         guidance_3 = F.interpolate(S_3, scale_factor=1, mode='bilinear')
@@ -454,25 +454,25 @@ class ZoomNet(BasicModelClass):
 
         S_2_map = F.interpolate(S_2, scale_factor=0.25, mode='bilinear') 
        # S_5 = torch.cat((S_2_map, S_5),1)
-        S_5 = self.final_comb_5(S_2_map, S_5)
-        S_5_pred = F.interpolate(S_5, scale_factor=16, mode='bilinear')
+        _, M_5 = self.final_comb_5(S_2_map, S_5)
+        M_5_pred = F.interpolate(M_5, scale_factor=16, mode='bilinear')
         
-        S_5 = F.interpolate(S_5, scale_factor=2, mode='bilinear')
+        M_5 = F.interpolate(M_5, scale_factor=2, mode='bilinear')
       #  S_4 = torch.cat((S_5, S_4),1)
-        S_4 = self.final_comb_4(S_5, S_4)
-        S_4_pred = F.interpolate(S_4, scale_factor=8, mode='bilinear')
+        _, M_4 = self.final_comb_4(M_5, S_4)
+        M_4_pred = F.interpolate(M_4, scale_factor=8, mode='bilinear')
 
-        S_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
+        M_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
       #  S_3 = torch.cat((S_4, S_3),1)
-        S_3 = self.final_comb_3(S_4, S_3)
-        S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')
+        _, M_3 = self.final_comb_3(M_4, S_3)
+        M_3_pred = F.interpolate(M_3, scale_factor=4, mode='bilinear')
 
        # S_2 = torch.cat((S_3, S_2),1)
-        S_2 = self.final_comb_2(S_3, S_2)
-        S_1_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')
+        _, M_2 = self.final_comb_2(M_3, S_2)
+        M_1_pred = F.interpolate(M_2, scale_factor=4, mode='bilinear')
 
         # return dict(seg=logits)
-        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
+        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, M_5=M_5_pred, M_4=M_4_pred, M_3=M_3_pred, M_1=M_1_pred)
 
         # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
@@ -490,7 +490,7 @@ class ZoomNet(BasicModelClass):
             iter_percentage=kwargs["curr"]["iter_percentage"],
         )
         # return dict(sal=output["S_2"].sigmoid()), loss, loss_str
-        return dict(sal=output["S_1"].sigmoid()), loss, loss_str     # S_2 -> S_1
+        return dict(sal=output["M_1"].sigmoid()), loss, loss_str     # S_2 -> S_1
     
     def test_forward(self, data, **kwargs):
         output = self.body(
@@ -499,7 +499,7 @@ class ZoomNet(BasicModelClass):
             l_scale=data["image2.0"],
         )
         # return output["S_2"]
-        return output["S_1"]                     # S_2 -> S_1
+        return output["M_1"]                     # S_2 -> S_1
 
     def cal_loss(self, all_preds: dict, gts: torch.Tensor, method="cos", iter_percentage: float = 0):
         ual_coef = get_coef(iter_percentage, method)

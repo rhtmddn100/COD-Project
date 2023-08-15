@@ -157,3 +157,5 @@ cython_debug/
 TestDataset
 TrainDataset
 pretrained_pvt
+
+suyoung*

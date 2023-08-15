@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import argparse
 import json
 import os
@@ -12,6 +10,9 @@ import torch
 from tqdm import tqdm
 
 from utils import builder, configurator, io, misc, ops, pipeline, recorder
+
+### for multi GPU
+import torch.nn as nn
 
 
 def parse_config():
@@ -71,7 +72,7 @@ def parse_config():
 
 @recorder.TimeRecoder.decorator(start_msg="Test")
 def test_once(
-    model, data_loader, save_path, tta_setting, clip_range=None, show_bar=False, desc="[TE]", to_minmax=False
+    model, data_loader, save_path, tta_setting, clip_range=None, show_bar=False, desc="[TE]", to_minmax=False, device=None
 ):
     model.eval()
     model.is_training = False
@@ -81,7 +82,7 @@ def test_once(
     if show_bar:
         pgr_bar = tqdm(pgr_bar, total=len(data_loader), ncols=79, desc=desc)
     for batch_id, batch in pgr_bar:
-        batch_images = misc.to_device(batch["data"], device=model.device)
+        batch_images = misc.to_device(batch["data"], device=device)
         if tta_setting.enable:
             logits = pipeline.test_aug(
                 model=model, data=batch_images, strategy=tta_setting.strategy, reducation=tta_setting.reduction
@@ -113,7 +114,7 @@ def test_once(
 
 
 @torch.no_grad()
-def testing(model, cfg):
+def testing(model, cfg, device):
     for data_name, data_path, loader in pipeline.get_te_loader(cfg):
         pred_save_path = os.path.join(cfg.path.save, data_name)
         cfg.te_logger.record(f"Results will be saved into {pred_save_path}")
@@ -125,12 +126,13 @@ def testing(model, cfg):
             clip_range=cfg.test.clip_range,
             show_bar=cfg.test.get("show_bar", False),
             to_minmax=cfg.test.get("to_minmax", False),
+            device=device
         )
         cfg.te_logger.record(f"Results on the testset({data_name}): {misc.mapping_to_str(data_path)}\n{seg_results}")
         cfg.excel_logger(row_data=seg_results, dataset_name=data_name, method_name=cfg.exp_name)
 
 
-def training(model, cfg) -> pipeline.ModelEma:
+def training(model, cfg, device) -> pipeline.ModelEma:
     tr_loader = pipeline.get_tr_loader(cfg)
     cfg.epoch_length = len(tr_loader)
 
@@ -199,7 +201,7 @@ def training(model, cfg) -> pipeline.ModelEma:
         for batch_idx, batch in enumerate(tr_loader):
             scheduler.step(curr_idx=curr_iter)  # update learning rate
 
-            batch_data = misc.to_device(data=batch["data"], device=model.device)
+            batch_data = misc.to_device(data=batch["data"], device=device)
             with torch.cuda.amp.autocast(enabled=cfg.train.use_amp):
                 probs, loss, loss_str = model(
                     data=batch_data,
@@ -210,7 +212,8 @@ def training(model, cfg) -> pipeline.ModelEma:
                 )
                 loss = loss / cfg.train.grad_acc_step
 
-            scaler.scale(loss).backward()
+            ###
+            scaler.scale(loss).mean().backward()
 
             if cfg.train.grad_clip.enable:
                 scaler.unscale_(optimizer)
@@ -229,7 +232,9 @@ def training(model, cfg) -> pipeline.ModelEma:
                 if model_ema is not None:
                     model_ema.update(model)
 
-            item_loss = loss.item()
+            # import pdb;pdb.set_trace()
+            # item_loss = loss.item()
+            item_loss = loss.detach().cpu()
             data_shape = batch_data["mask"].shape
             loss_recorder.update(value=item_loss, num=data_shape[0])
 
@@ -238,11 +243,13 @@ def training(model, cfg) -> pipeline.ModelEma:
                     or (curr_iter + 1) % cfg.epoch_length == 0
                     or (curr_iter + 1) == cfg.train.num_iters
             ):
+                
+                # import pdb;pdb.set_trace()
                 msg = " | ".join(
                     [
                         f"I:{curr_iter}:{cfg.train.num_iters} {batch_idx}/{cfg.epoch_length} {curr_epoch}/{cfg.train.num_epochs}",
                         f"Lr:{optimizer.lr_string()}",
-                        f"M:{loss_recorder.avg:.5f}/C:{item_loss:.5f}",
+                        f"M:{torch.mean(loss_recorder.avg):.5f}/C:{torch.mean(item_loss):.5f}",
                         f"{list(data_shape)}",
                         f"{loss_str}",
                     ]
@@ -331,22 +338,30 @@ def main():
     cfg.tr_logger.record(model_code)
     cfg.tr_logger.record(model)
 
-    model.device = "cuda:0"
-    model.to(model.device)
+    ### Single GPU 
+    # model.device = "cuda:0"
+    # model.to(model.device)
+
+    ### Multi GPU ###
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = torch.nn.DataParallel(model, device_ids=[0,1], output_device=0).to(device)    
+    #################
+
 
     if cfg.load_from:
         model_ema = io.load_weight(model=model, load_path=cfg.load_from)
     else:
-        model_ema = training(model=model, cfg=cfg)
+        model_ema = training(model=model, cfg=cfg, device=device)
 
     if cfg.has_test:
         if model_ema is not None:
-            testing(model=model_ema.module, cfg=cfg)
+            testing(model=model_ema.module, cfg=cfg, device=device)
             if cfg.train.ema.keep_original_test:
                 cfg.tr_logger.record(f"The results from original model will overwrite the model_ema's.")
-                testing(model=model, cfg=cfg)
+                testing(model=model, cfg=cfg, device=device)
         else:
-            testing(model=model, cfg=cfg)
+            testing(model=model, cfg=cfg, device=device)
 
     cfg.tr_logger.record("End training...")
 
