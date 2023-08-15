@@ -167,7 +167,7 @@ class ReverseStage(nn.Module):
 
     def forward(self, x, y):
         # reverse guided block
-        y = -1 * (torch.sigmoid(y)) + 1
+        y = torch.sigmoid(y)
 
         # three group-reversal attention blocks
         x, y = self.weak_gra(x, y)
@@ -396,11 +396,11 @@ class ZoomNet(BasicModelClass):
 
         #x = output of HMU 3
         #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x3)) # [bs,1,48,48]
-        S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear') # [bs,1,384,384]
+        S_g = self.out_layer_01(self.out_layer_00(x4)) # [bs,1,96,96]
+        S_g_pred = F.interpolate(S_g, scale_factor=4, mode='bilinear') # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.5, mode='bilinear') # [bs,1,24,24]
+        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear') # [bs,1,24,24]
         combi_5 = torch.cat((cus_sample(x1, mode="scale", factors=2), x2), 1) # [bs,128,24,24]
         combi_5 = self.combi_layer_5(combi_5) # [bs,64,24,24]
         ra4_feat = self.RS5(combi_5, guidance_g)
