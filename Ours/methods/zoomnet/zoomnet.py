@@ -113,7 +113,7 @@ class SIU(nn.Module):
         l = F.adaptive_max_pool2d(l, tgt_size)
         # l = self.conv_l_post_down(l)
 
-        pooling = "max_pooling"
+        pooling = "max_pool"
 
         if pooling == "attn_pool":
             attn = self.trans1(torch.cat([s, m, l], dim=1))                                                     ###
