@@ -82,9 +82,9 @@ class SIU(nn.Module):
         super().__init__()
         self.conv_s = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
         self.conv_m_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
-        self.conv_m_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
+        # self.conv_m_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
         self.conv_l_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
-        self.conv_l_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
+        # self.conv_l_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
         self.trans = nn.Sequential(                                                                        ###
             ConvBNReLU(3 * in_dim, in_dim, 1),                                                             ###
             ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
@@ -100,12 +100,12 @@ class SIU(nn.Module):
         tgt_size = s.shape[2:]
         # x 1.5
         m = self.conv_m_pre_down(m)
-        m = F.adaptive_max_pool2d(m, tgt_size) + F.adaptive_avg_pool2d(m, tgt_size)
-        m = self.conv_m_post_down(m)
+        m = F.adaptive_max_pool2d(m, tgt_size)
+        # m = self.conv_m_post_down(m)
         # x 2.0
         l = self.conv_l_pre_down(l)
-        l = F.adaptive_max_pool2d(l, tgt_size) + F.adaptive_avg_pool2d(l, tgt_size)
-        l = self.conv_l_post_down(l)
+        l = F.adaptive_max_pool2d(l, tgt_size)
+        # l = self.conv_l_post_down(l)
 
         attn = self.trans(torch.cat([s, m, l], dim=1))                                                     ###
         attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)                                ###
