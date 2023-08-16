@@ -465,14 +465,14 @@ class ZoomNet(BasicModelClass):
         S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 2 ----
-        guidance_3 = F.interpolate(S_3, scale_factor=1, mode='bilinear')
-        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=2), x4), 1) # [bs,192,96,96]
-        combi_2 = self.combi_layer_2(combi_2) # [bs,64,96,96]
-        ra1_feat = self.RS2(x4, guidance_3)
+        guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
+        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=4), cus_sample(x4, mode="scale", factors=2)), 1) # [bs,1,192,192]
+        combi_2 = self.combi_layer_2(combi_2) # [bs,64,192,192]
+        ra1_feat = self.RS2(combi_2, guidance_3)
         S_2 = ra1_feat + guidance_3
 
         #S_2 work as a second coarse map -> cal loss of S_2_pred
-        S_2_pred = F.interpolate(S_2, scale_factor=4, mode='bilinear')  # Sup-5 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
+        S_2_pred = F.interpolate(S_2, scale_factor=2, mode='bilinear')  # Sup-5 (bs, 1, 192, 192) -> (bs, 1, 384, 384)
 
         '''
         high_S_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
@@ -486,7 +486,7 @@ class ZoomNet(BasicModelClass):
         # S_1 = ra0_feat + guidance_2
         # S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
-        S_2_map = F.interpolate(S_2, scale_factor=0.25, mode='bilinear') 
+        S_2_map = F.interpolate(S_2, scale_factor=0.125, mode='bilinear') 
        # S_5 = torch.cat((S_2_map, S_5),1)
         _, M_5 = self.final_comb_5(S_2_map, S_5)
         M_5_pred = F.interpolate(M_5, scale_factor=16, mode='bilinear')
@@ -496,14 +496,16 @@ class ZoomNet(BasicModelClass):
         _, M_4 = self.final_comb_4(M_5, S_4)
         M_4_pred = F.interpolate(M_4, scale_factor=8, mode='bilinear')
 
-        M_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
+        M_4 = F.interpolate(M_4, scale_factor=2, mode='bilinear')
       #  S_3 = torch.cat((S_4, S_3),1)
         _, M_3 = self.final_comb_3(M_4, S_3)
         M_3_pred = F.interpolate(M_3, scale_factor=4, mode='bilinear')
-
-       # S_2 = torch.cat((S_3, S_2),1)
+	
+        M_3 = F.interpolate(M_3, scale_factor=2, mode='bilinear')
+       
+	# S_2 = torch.cat((S_3, S_2),1)
         _, M_2 = self.final_comb_2(M_3, S_2)
-        M_1_pred = F.interpolate(M_2, scale_factor=4, mode='bilinear')
+        M_1_pred = F.interpolate(M_2, scale_factor=2, mode='bilinear')
 
         # return dict(seg=logits)
         return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, M_5=M_5_pred, M_4=M_4_pred, M_3=M_3_pred, M_1=M_1_pred)
