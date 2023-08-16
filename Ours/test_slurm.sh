@@ -13,4 +13,4 @@ python test.py --config ./configs/zoomnet/zoomnet.py \
     --model-name ZoomNet \
     --batch-size 22 \
     --load-from /home/user/suyoung/COD-Project/Ours/output/ZoomNet_BS16_LR0.01_E100_H384_W384_OPMsgd_OPGMfinetune_SCf3_AMP_INFOdemo/pth/state_final.pth \
-    --save-path ./output/ForSharing/COD_Results_1 > suyoung_test1.out
+    --save-path ./output/ForSharing/COD_Results_M1 > suyoung_test1.out

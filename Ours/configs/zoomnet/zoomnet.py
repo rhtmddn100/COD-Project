@@ -11,7 +11,7 @@ model_name = "ZoomNet"
 
 train = dict(
     batch_size=16,
-    num_workers=8,
+    num_workers=4,
     use_amp=True,
     num_epochs=100,
     epoch_based=True,
@@ -57,7 +57,7 @@ datasets = dict(
     test=dict(
         dataset_type="msi_cod_te",
         shape=dict(h=384, w=384),
-        path=["camo_te", "chameleon", "cod10k_te", "coco", "voc"],
+        path=["camo_te", "chameleon", "cod10k_te", "nc4k"],
         interp_cfg=dict(),
     ),
 )
