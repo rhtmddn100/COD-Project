@@ -85,12 +85,18 @@ class SIU(nn.Module):
         # self.conv_m_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
         self.conv_l_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
         # self.conv_l_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.trans = nn.Sequential(                                                                        ###
+        self.trans1 = nn.Sequential(                                                                        ###
             ConvBNReLU(3 * in_dim, in_dim, 1),                                                             ###
             ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
             ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
             nn.Conv2d(in_dim, 3, 1),                                                                       ###
-        )                                                                                                  ###
+        )
+        self.trans2 = nn.Sequential(                                                                        ###
+            ConvBNReLU(3 * in_dim, 3 * in_dim, 1),                                                             ###
+            ConvBNReLU(3 * in_dim, 3 * in_dim, 3, 1, 1),                                                           ###
+            ConvBNReLU(3 * in_dim, 3 * in_dim, 3, 1, 1),                                                           ###
+            nn.Conv2d(3 * in_dim, 3 * in_dim, 1),                                                                       ###
+        )   ###
 
     def forward(self, l, m, s, return_feats=False):
         # x 1.0
@@ -107,9 +113,37 @@ class SIU(nn.Module):
         l = F.adaptive_max_pool2d(l, tgt_size)
         # l = self.conv_l_post_down(l)
 
-        attn = self.trans(torch.cat([s, m, l], dim=1))                                                     ###
-        attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)                                ###
-        lms = attn_s * s + attn_m * m + attn_l * l                                                         ###
+        pooling = "max_pooling"
+
+        if pooling == "attn_pool":
+            attn = self.trans1(torch.cat([s, m, l], dim=1))                                                     ###
+            attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)
+            lms = attn_s * s + attn_m * m + attn_l * l
+        
+        elif pooling == "attn_pool_all":
+            attn = self.trans2(torch.cat([s, m, l], dim=1))                                                     ###
+            attnA, attnB, attnC = attn.chunk(3, dim = 1)
+            attnA, attnB, attnC = attnA.unsqueeze(1), attnB.unsqueeze(1), attnC.unsqueeze(1)
+            attn = torch.cat([attnA, attnB, attnC], dim=1)
+            attn = torch.softmax(attn, dim=1)
+            attn_s, attn_m, attn_l = torch.chunk(attn, 3, dim=1)
+            attn_s, attn_m, attn_l =  attn_s.squeeze(), attn_m.squeeze(), attn_l.squeeze()
+            lms = attn_s * s + attn_m * m + attn_l * l
+
+        elif pooling == "avg_pool":
+            attn_s, attn_m, attn_l = 1/3, 1/3, 1/3
+            lms = attn_s * s + attn_m * m + attn_l * l
+
+        elif pooling == "max_pool":
+            s = s.unsqueeze(1)
+            m = m.unsqueeze(1)
+            l = l.unsqueeze(1)
+            cat_tens = torch.cat([s, m, l], dim=1)
+            lms = torch.max(cat_tens, dim=1)[0]
+        
+        # attn = self.trans(torch.cat([s, m, l], dim=1))                                                     ###
+        # attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)                                ###
+        # lms = attn_s * s + attn_m * m + attn_l * l                                                         ###
 
         if return_feats:
             return lms, dict(attn_s=attn_s, attn_m=attn_m, attn_l=attn_l, s=s, m=m, l=l)
