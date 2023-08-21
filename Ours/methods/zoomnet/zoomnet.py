@@ -367,8 +367,8 @@ class ZoomNet(BasicModelClass):
         self.combi_layer_5 = ConvBNReLU(128, 64, 3, 1, 1)
         self.combi_layer_4 = ConvBNReLU(192, 64, 3, 1, 1)
         self.combi_layer_3 = ConvBNReLU(192, 64, 3, 1, 1)
-        self.combi_layer_2 = ConvBNReLU(192, 64, 3, 1, 1)
-        self.combi_layer_1 = ConvBNReLU(128, 64, 3, 1, 1)
+        self.combi_layer_2 = ConvBNReLU(128, 64, 3, 1, 1)
+      #  self.combi_layer_1 = ConvBNReLU(128, 64, 3, 1, 1)
 
         self.RS5 = ReverseStage(64)
         self.RS4 = ReverseStage(64)
@@ -423,11 +423,11 @@ class ZoomNet(BasicModelClass):
 
         #x = output of HMU 3
         #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x5)) # [bs,1,96,96]
-        S_g_pred = F.interpolate(S_g, scale_factor=2, mode='bilinear') # [bs,1,384,384]
+        S_g = self.out_layer_01(self.out_layer_00(x3)) # [bs,1,96,96]
+        S_g_pred = F.interpolate(S_g, scale_factor=8, mode='bilinear') # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.125, mode='bilinear') # [bs,1,24,24]
+        guidance_g = F.interpolate(S_g, scale_factor=0.5, mode='bilinear') # [bs,1,24,24]
         combi_5 = torch.cat((cus_sample(x1, mode="scale", factors=2), x2), 1) # [bs,128,24,24]
         combi_5 = self.combi_layer_5(combi_5) # [bs,64,24,24]
         ra4_feat = self.RS5(combi_5, guidance_g)
@@ -459,21 +459,23 @@ class ZoomNet(BasicModelClass):
 
         # ---- reverse stage 2 ----
         guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
-        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=4), cus_sample(x4, mode="scale", factors=2), x5), 1) # [bs,1,192,192]
+        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=4), cus_sample(x4, mode="scale", factors=2)), 1) # [bs,1,192,192]
         combi_2 = self.combi_layer_2(combi_2) # [bs,64,192,192]
         ra1_feat = self.RS2(combi_2, guidance_3)
         S_2 = ra1_feat + guidance_3
         S_2_pred = F.interpolate(S_2, scale_factor=2, mode='bilinear')
 
+        '''
         guidance_2 = F.interpolate(S_2, scale_factor=2, mode='bilinear')
         combi_1 = torch.cat((cus_sample(x4, mode="scale", factors=4), cus_sample(x5, mode="scale", factors=2)), 1) # [bs,1,192,192]
       #  print(combi_1.shape) ## [bs,64,384,384]
         combi_1 = self.combi_layer_1(combi_1) 
         ra0_feat = self.RS1(combi_1, guidance_2)
         S_1 = ra0_feat + guidance_2
+        '''
 
         #S_2 work as a second coarse map -> cal loss of S_2_pred
-        S_1_pred = S_1
+     #   S_1_pred = S_1
       #  S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')  # Sup-5 (bs, 1, 192, 192) -> (bs, 1, 384, 384)
 
         '''
@@ -488,7 +490,7 @@ class ZoomNet(BasicModelClass):
         # S_1 = ra0_feat + guidance_2
         # S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
-        S_1_map = F.interpolate(S_1, scale_factor=0.0625, mode='bilinear') 
+        S_1_map = F.interpolate(S_2, scale_factor=0.125, mode='bilinear') 
        # S_5 = torch.cat((S_2_map, S_5),1)
         _, M_5 = self.final_comb_5(S_1_map, S_5)
         M_5_pred = F.interpolate(M_5, scale_factor=16, mode='bilinear')
@@ -508,13 +510,15 @@ class ZoomNet(BasicModelClass):
         _, M_2 = self.final_comb_2(M_3, S_2)
         M_2_pred = F.interpolate(M_2, scale_factor=2, mode='bilinear')
 
+        '''
         M_2 = F.interpolate(M_2, scale_factor=2, mode='bilinear')
         _, M_1 = self.final_comb_1(M_2, S_1)
      #   print(M_1.shape)
         M_1_pred = M_1
+        '''
 
         # return dict(seg=logits)
-        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred, M_5=M_5_pred, M_4=M_4_pred, M_3=M_3_pred, M_2=M_2_pred,  M_1=M_1_pred)
+        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, M_5=M_5_pred, M_4=M_4_pred, M_3=M_3_pred, M_2=M_2_pred)
 
         # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
@@ -532,7 +536,7 @@ class ZoomNet(BasicModelClass):
             iter_percentage=kwargs["curr"]["iter_percentage"],
         )
         # return dict(sal=output["S_2"].sigmoid()), loss, loss_str
-        return dict(sal=output["M_1"].sigmoid()), loss, loss_str     # S_2 -> S_1
+        return dict(sal=output["M_2"].sigmoid()), loss, loss_str     # S_2 -> S_1
     
     def test_forward(self, data, **kwargs):
         output = self.body(
@@ -541,7 +545,7 @@ class ZoomNet(BasicModelClass):
             l_scale=data["image2.0"],
         )
         # return output["S_2"]
-        return output["M_1"]                     # S_2 -> S_1
+        return output["M_2"]                     # S_2 -> S_1
 
     def cal_loss(self, all_preds: dict, gts: torch.Tensor, method="cos", iter_percentage: float = 0):
         ual_coef = get_coef(iter_percentage, method)
