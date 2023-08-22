@@ -95,7 +95,6 @@ class MSICOD_TrainDataset(_BaseSODDataset):
                 "image1.0": image_1_0,
                 "mask": mask_1_0,
             }
-            }
         )
 
     def __len__(self):
