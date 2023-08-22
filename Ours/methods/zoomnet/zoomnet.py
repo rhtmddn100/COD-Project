@@ -77,77 +77,77 @@ class TransLayer(nn.Module):
         # return c5, c4, c3, c2, c1
         return c5, c4, c3, c2
 
-class SIU(nn.Module):
-    def __init__(self, in_dim):
-        super().__init__()
-        self.conv_s = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.conv_m_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
-        # self.conv_m_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.conv_l_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
-        # self.conv_l_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
-        self.trans1 = nn.Sequential(                                                                        ###
-            ConvBNReLU(3 * in_dim, in_dim, 1),                                                             ###
-            ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
-            ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
-            nn.Conv2d(in_dim, 3, 1),                                                                       ###
-        )
-        self.trans2 = nn.Sequential(                                                                        ###
-            ConvBNReLU(3 * in_dim, 3 * in_dim, 1),                                                             ###
-            ConvBNReLU(3 * in_dim, 3 * in_dim, 3, 1, 1),                                                           ###
-            ConvBNReLU(3 * in_dim, 3 * in_dim, 3, 1, 1),                                                           ###
-            nn.Conv2d(3 * in_dim, 3 * in_dim, 1),                                                                       ###
-        )   ###
+# class SIU(nn.Module):
+#     def __init__(self, in_dim):
+#         super().__init__()
+#         self.conv_s = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
+#         self.conv_m_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
+#         # self.conv_m_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
+#         self.conv_l_pre_down = ConvBNReLU(in_dim, in_dim, 5, stride=1, padding=2)
+#         # self.conv_l_post_down = ConvBNReLU(in_dim, in_dim, 3, 1, 1)
+#         self.trans1 = nn.Sequential(                                                                       ###
+#             ConvBNReLU(3 * in_dim, in_dim, 1),                                                             ###
+#             ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
+#             ConvBNReLU(in_dim, in_dim, 3, 1, 1),                                                           ###
+#             nn.Conv2d(in_dim, 3, 1),                                                                       ###
+#         )
+#         self.trans2 = nn.Sequential(                                                                        ###
+#             ConvBNReLU(3 * in_dim, 3 * in_dim, 1),                                                             ###
+#             ConvBNReLU(3 * in_dim, 3 * in_dim, 3, 1, 1),                                                           ###
+#             ConvBNReLU(3 * in_dim, 3 * in_dim, 3, 1, 1),                                                           ###
+#             nn.Conv2d(3 * in_dim, 3 * in_dim, 1),                                                                       ###
+#         )   ###
 
-    def forward(self, l, m, s, return_feats=False):
-        # x 1.0
-        # s = self.conv_m(s)
-        s = self.conv_s(s)
+#     def forward(self, l, m, s, return_feats=False):
+#         # x 1.0
+#         # s = self.conv_m(s)
+#         s = self.conv_s(s)
 
-        tgt_size = s.shape[2:]
-        # x 1.5
-        m = self.conv_m_pre_down(m)
-        m = F.adaptive_max_pool2d(m, tgt_size)
-        # m = self.conv_m_post_down(m)
-        # x 2.0
-        l = self.conv_l_pre_down(l)
-        l = F.adaptive_max_pool2d(l, tgt_size)
-        # l = self.conv_l_post_down(l)
+#         tgt_size = s.shape[2:]
+#         # x 1.5
+#         m = self.conv_m_pre_down(m)
+#         m = F.adaptive_max_pool2d(m, tgt_size)
+#         # m = self.conv_m_post_down(m)
+#         # x 2.0
+#         l = self.conv_l_pre_down(l)
+#         l = F.adaptive_max_pool2d(l, tgt_size)
+#         # l = self.conv_l_post_down(l)
 
-        pooling = "avg_pool"
+#         pooling = "avg_pool"
 
-        if pooling == "attn_pool":
-            attn = self.trans1(torch.cat([s, m, l], dim=1))                                                     ###
-            attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)
-            lms = attn_s * s + attn_m * m + attn_l * l
+#         if pooling == "attn_pool":
+#             attn = self.trans1(torch.cat([s, m, l], dim=1))                                                     ###
+#             attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)
+#             lms = attn_s * s + attn_m * m + attn_l * l
         
-        elif pooling == "attn_pool_all":
-            attn = self.trans2(torch.cat([s, m, l], dim=1))                                                     ###
-            attnA, attnB, attnC = attn.chunk(3, dim = 1)
-            attnA, attnB, attnC = attnA.unsqueeze(1), attnB.unsqueeze(1), attnC.unsqueeze(1)
-            attn = torch.cat([attnA, attnB, attnC], dim=1)
-            attn = torch.softmax(attn, dim=1)
-            attn_s, attn_m, attn_l = torch.chunk(attn, 3, dim=1)
-            attn_s, attn_m, attn_l =  attn_s.squeeze(), attn_m.squeeze(), attn_l.squeeze()
-            lms = attn_s * s + attn_m * m + attn_l * l
+#         elif pooling == "attn_pool_all":
+#             attn = self.trans2(torch.cat([s, m, l], dim=1))                                                     ###
+#             attnA, attnB, attnC = attn.chunk(3, dim = 1)
+#             attnA, attnB, attnC = attnA.unsqueeze(1), attnB.unsqueeze(1), attnC.unsqueeze(1)
+#             attn = torch.cat([attnA, attnB, attnC], dim=1)
+#             attn = torch.softmax(attn, dim=1)
+#             attn_s, attn_m, attn_l = torch.chunk(attn, 3, dim=1)
+#             attn_s, attn_m, attn_l =  attn_s.squeeze(), attn_m.squeeze(), attn_l.squeeze()
+#             lms = attn_s * s + attn_m * m + attn_l * l
 
-        elif pooling == "avg_pool":
-            attn_s, attn_m, attn_l = 1/3, 1/3, 1/3
-            lms = attn_s * s + attn_m * m + attn_l * l
+#         elif pooling == "avg_pool":
+#             attn_s, attn_m, attn_l = 1/3, 1/3, 1/3
+#             lms = attn_s * s + attn_m * m + attn_l * l
 
-        elif pooling == "max_pool":
-            s = s.unsqueeze(1)
-            m = m.unsqueeze(1)
-            l = l.unsqueeze(1)
-            cat_tens = torch.cat([s, m, l], dim=1)
-            lms = torch.max(cat_tens, dim=1)[0]
+#         elif pooling == "max_pool":
+#             s = s.unsqueeze(1)
+#             m = m.unsqueeze(1)
+#             l = l.unsqueeze(1)
+#             cat_tens = torch.cat([s, m, l], dim=1)
+#             lms = torch.max(cat_tens, dim=1)[0]
         
-        # attn = self.trans(torch.cat([s, m, l], dim=1))                                                     ###
-        # attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)                                ###
-        # lms = attn_s * s + attn_m * m + attn_l * l                                                         ###
+#         # attn = self.trans(torch.cat([s, m, l], dim=1))                                                     ###
+#         # attn_s, attn_m, attn_l = torch.softmax(attn, dim=1).chunk(3, dim=1)                                ###
+#         # lms = attn_s * s + attn_m * m + attn_l * l                                                         ###
 
-        if return_feats:
-            return lms, dict(attn_s=attn_s, attn_m=attn_m, attn_l=attn_l, s=s, m=m, l=l)
-        return lms
+#         if return_feats:
+#             return lms, dict(attn_s=attn_s, attn_m=attn_m, attn_l=attn_l, s=s, m=m, l=l)
+#         return lms
 
 class GRA(nn.Module):
     def __init__(self, channel, subchannel):
@@ -345,7 +345,7 @@ class ZoomNet(BasicModelClass):
         # self.shared_encoder = timm.create_model(model_name="resnet50", pretrained=True, in_chans=3, features_only=True)
         self.translayer = TransLayer(out_c=64)  # [c5, c4, c3, c2, c1]
         # self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
-        self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
+        # self.merge_layers = nn.ModuleList([SIU(in_dim=in_c) for in_c in (64, 64, 64, 64, 64)])
 
         self.d5 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
         self.d4 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
@@ -402,28 +402,26 @@ class ZoomNet(BasicModelClass):
         trans_feats = self.translayer(pvt)
         return trans_feats
 
-    def body(self, s_scale, m_scale, l_scale):
+    def body(self, s_scale):
         # shape => s_scale: [2,3,384,384], m_scale: [2,3,576,576], l_scale: [2,3,768,768]
         # s_trans_feats (tuple type) : 0:[2,64,12,12}, 1:[2,64,24,24], 2:[2,64,48,48], 3:[2,64,96,96]
         # m_trans_feats (tuple type) : 0:[2,64,18,18}, 1:[2,64,36,36], 2:[2,64,72,72], 3:[2,64,144,144]
         s_trans_feats = self.encoder_translayer(s_scale) # x1.0
-        m_trans_feats = self.encoder_translayer(m_scale) # x1.5
-        l_trans_feats = self.encoder_translayer(l_scale) # x2.0
 
-        feats = []
-        for s, m, l, layer in zip(s_trans_feats, m_trans_feats, l_trans_feats, self.merge_layers):
-            siu_outs = layer(s=s, m=m, l=l)
-            feats.append(siu_outs)
+        # feats = []
+        # for s, m, l, layer in zip(s_trans_feats, m_trans_feats, l_trans_feats, self.merge_layers):
+        #     siu_outs = layer(s=s, m=m, l=l)
+        #     feats.append(siu_outs)
         
         #feats[0:2] = outputs of SIU 3~5
 
-        x1 = self.d5(feats[0])  # [bs,64,12,12]
+        x1 = self.d5(s_trans_feats[0])  # [bs,64,12,12]
         x2 = cus_sample(x1, mode="scale", factors=2)  # [bs,64,24,24]
-        x2 = self.d4(x2 + feats[1])  # [bs,64,24,24]
+        x2 = self.d4(x2 + s_trans_feats[1])  # [bs,64,24,24]
         x3 = cus_sample(x2, mode="scale", factors=2)  # [bs,64,48,48]
-        x3 = self.d3(x3 + feats[2])  # [bs,64,48,48]
+        x3 = self.d3(x3 + s_trans_feats[2])  # [bs,64,48,48]
         x4 = cus_sample(x3, mode="scale", factors=2)  # [bs,64,96,96]
-        x4 = self.d2(x4 + feats[3])  # [bs,64,96,96]
+        x4 = self.d2(x4 + s_trans_feats[3])  # [bs,64,96,96]
         # x = cus_sample(x, mode="scale", factors=2)
         # # x = self.d1(x + feats[4])
         # # x = cus_sample(x, mode="scale", factors=2)
@@ -513,29 +511,25 @@ class ZoomNet(BasicModelClass):
         # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
     def train_forward(self, data, **kwargs):
-        assert not {"image1.0", "image1.5", "image2.0", "mask"}.difference(set(data)), set(data)
+        assert not {"image1.0", "mask"}.difference(set(data)), set(data)
 
         output = self.body(
             s_scale=data["image1.0"],
-            m_scale=data["image1.5"],
-            l_scale=data["image2.0"],
         )
         loss, loss_str = self.cal_loss(
             all_preds=output,
             gts=data["mask"],
             iter_percentage=kwargs["curr"]["iter_percentage"],
         )
-        # return dict(sal=output["S_2"].sigmoid()), loss, loss_str
-        return dict(sal=output["M_1"].sigmoid()), loss, loss_str     # S_2 -> S_1
+        # return dict(sal=output["S_g"].sigmoid()), loss, loss_str
+        return dict(sal=output["M_1"].sigmoid()), loss, loss_str
     
     def test_forward(self, data, **kwargs):
         output = self.body(
             s_scale=data["image1.0"],
-            m_scale=data["image1.5"],
-            l_scale=data["image2.0"],
         )
-        # return output["S_2"]
-        return output["M_1"]                     # S_2 -> S_1
+        # return output["S_g"]
+        return output["M_1"]
 
     def cal_loss(self, all_preds: dict, gts: torch.Tensor, method="cos", iter_percentage: float = 0):
         ual_coef = get_coef(iter_percentage, method)
