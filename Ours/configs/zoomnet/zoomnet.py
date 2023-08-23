@@ -50,13 +50,13 @@ test = dict(
 datasets = dict(
     train=dict(
         dataset_type="msi_cod_tr",
-        shape=dict(h=704, w=704),
+        shape=dict(h=768, w=768),
         path=["cod10k_camo_tr"],
         interp_cfg=dict(),
     ),
     test=dict(
         dataset_type="msi_cod_te",
-        shape=dict(h=704, w=704),
+        shape=dict(h=768, w=768),
         path=["camo_te", "chameleon", "cod10k_te", "nc4k"],
         interp_cfg=dict(),
     ),
