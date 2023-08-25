@@ -4,8 +4,8 @@
 #SBATCH -N 1
 #SBATCH -n 2
 
-#SBATCH -o suyoung01.out
-#SBATCH -e suyoung01.err
+#SBATCH -o suyoung_test1.out
+#SBATCH -e suyoung_test1.err
 #SBATCH --time 12:00:00
 #SBATCH --gres=gpu:2
 

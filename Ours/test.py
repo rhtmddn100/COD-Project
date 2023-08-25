@@ -8,6 +8,7 @@ import os.path
 import numpy as np
 import torch
 from tqdm import tqdm
+from ptflops import get_model_comlexity_info
 
 from utils import builder, configurator, io, misc, ops, pipeline, recorder
 
@@ -125,6 +126,10 @@ def testing(model, cfg):
             to_minmax=cfg.test.get("to_minmax", False),
         )
         print(f"Results on the testset({data_name}): {misc.mapping_to_str(data_path)}\n{seg_results}")
+    with torch.cuda.device(0):
+        macs, params = get_model_complexity_info(net, (3, 768, 768), as_strings=True, print_per_layer_stat=True, verbose=True)
+        print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+        print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
 def main():
