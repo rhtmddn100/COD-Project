@@ -59,23 +59,22 @@ from methods.module.pvtv2 import pvt_v2_b2
 class TransLayer(nn.Module):
     def __init__(self, out_c):
         super().__init__()
-        self.c5_down = nn.Sequential(ConvBNReLU(512, out_c, 3, 1, 1))
-        self.c4_down = nn.Sequential(ConvBNReLU(320, out_c, 3, 1, 1))
-        self.c3_down = nn.Sequential(ConvBNReLU(128, out_c, 3, 1, 1))
-        self.c2_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
-        # self.c1_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
+        self.c5_down = nn.Sequential(ConvBNReLU(2048, out_c, 3, 1, 1))
+        self.c4_down = nn.Sequential(ConvBNReLU(1024, out_c, 3, 1, 1))
+        self.c3_down = nn.Sequential(ConvBNReLU(512, out_c, 3, 1, 1))
+        self.c2_down = nn.Sequential(ConvBNReLU(256, out_c, 3, 1, 1))
+        self.c1_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
 
     def forward(self, xs):
         # assert isinstance(xs, (tuple, list))
-        assert len(xs) == 4
-        c2, c3, c4, c5 = xs
+        assert len(xs) == 5
+        c1, c2, c3, c4, c5 = xs
         c5 = self.c5_down(c5)
         c4 = self.c4_down(c4)
         c3 = self.c3_down(c3)
         c2 = self.c2_down(c2)
-        # c1 = self.c1_down(c1)
-        # return c5, c4, c3, c2, c1
-        return c5, c4, c3, c2
+        c1 = self.c1_down(c1)
+        return c5, c4, c3, c2, c1
 
 # class SIU(nn.Module):
 #     def __init__(self, in_dim):
@@ -334,13 +333,14 @@ class ZoomNet(BasicModelClass):
         super().__init__()
 
         # load pvt
-        self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = './pretrained_pvt/pvt_v2_b2.pth'
-        save_model = torch.load(path)
-        model_dict = self.backbone.state_dict()
-        state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
-        model_dict.update(state_dict)
-        self.backbone.load_state_dict(model_dict)
+        # self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
+        self.shared_encoder = timm.create_model(model_name="resnet50", pretrained=True, in_chans=3, features_only=True)
+        # path = './pretrained_pvt/pvt_v2_b2.pth'
+        # save_model = torch.load(path)
+        # model_dict = self.backbone.state_dict()
+        # state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
+        # model_dict.update(state_dict)
+        # self.backbone.load_state_dict(model_dict)
 
         # self.shared_encoder = timm.create_model(model_name="resnet50", pretrained=True, in_chans=3, features_only=True)
         self.translayer = TransLayer(out_c=64)  # [c5, c4, c3, c2, c1]
@@ -351,23 +351,26 @@ class ZoomNet(BasicModelClass):
         self.d4 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
         self.d3 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
         self.d2 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
+        self.d1 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
         self.d5 = nn.Sequential(*self.d5)
         self.d4 = nn.Sequential(*self.d4)
         self.d3 = nn.Sequential(*self.d3)
         self.d2 = nn.Sequential(*self.d2)
+        self.d1 = nn.Sequential(*self.d1)
         self.out_layer_00 = ConvBNReLU(64, 64, 3, 1, 1)
         self.out_layer_01 = nn.Conv2d(64, 1, 1)
 
         self.combi_layer_5 = ConvBNReLU(128, 64, 3, 1, 1)
         self.combi_layer_4 = ConvBNReLU(192, 64, 3, 1, 1)
         self.combi_layer_3 = ConvBNReLU(192, 64, 3, 1, 1)
-        self.combi_layer_2 = ConvBNReLU(128, 64, 3, 1, 1)
+        self.combi_layer_2 = ConvBNReLU(192, 64, 3, 1, 1)
+        self.combi_layer_1 = ConvBNReLU(128, 64, 3, 1, 1)
 
         self.RS5 = ReverseStage(64)
         self.RS4 = ReverseStage(64)
         self.RS3 = ReverseStage(64)
         self.RS2 = ReverseStage(64)
-        # self.RS1 = ReverseStage(64)
+        self.RS1 = ReverseStage(64)
      #   self.RS1 = GRA(1,1)
 
         ##Third Decoder##
@@ -375,6 +378,7 @@ class ZoomNet(BasicModelClass):
         self.final_comb_4 = GRA(1,1)
         self.final_comb_3 = GRA(1,1)
         self.final_comb_2 = GRA(1,1)
+        self.final_comb_1 = GRA(1, 1)
 
 
         '''
@@ -393,13 +397,13 @@ class ZoomNet(BasicModelClass):
         '''
 
     def encoder_translayer(self, x):
-        pvt = self.backbone(x)
+        en_feats = self.shared_encoder(x)
         # x1 = pvt[0]
         # x2 = pvt[1]
         # x3 = pvt[2]
         # x4 = pvt[3]
         # en_feats = self.shared_encoder(x)
-        trans_feats = self.translayer(pvt)
+        trans_feats = self.translayer(en_feats)
         return trans_feats
 
     def body(self, s_scale):
@@ -422,17 +426,17 @@ class ZoomNet(BasicModelClass):
         x3 = self.d3(x3 + s_trans_feats[2])  # [bs,64,48,48]
         x4 = cus_sample(x3, mode="scale", factors=2)  # [bs,64,96,96]
         x4 = self.d2(x4 + s_trans_feats[3])  # [bs,64,96,96]
-        # x = cus_sample(x, mode="scale", factors=2)
-        # # x = self.d1(x + feats[4])
+        x5 = cus_sample(x4, mode="scale", factors=2)
+        x5 = self.d1(x5 + s_trans_feats[4])
         # # x = cus_sample(x, mode="scale", factors=2)
 
         #x = output of HMU 3
         #coarse map
-        S_g = self.out_layer_01(self.out_layer_00(x4)) # [bs,1,96,96]
-        S_g_pred = F.interpolate(S_g, scale_factor=4, mode='bilinear') # [bs,1,384,384]
+        S_g = self.out_layer_01(self.out_layer_00(x5)) # [bs,1,192,192]
+        S_g_pred = F.interpolate(S_g, scale_factor=2, mode='bilinear') # [bs,1,384,384]
 
         # ---- reverse stage 5 ----
-        guidance_g = F.interpolate(S_g, scale_factor=0.25, mode='bilinear') # [bs,1,24,24]
+        guidance_g = F.interpolate(S_g, scale_factor=0.125, mode='bilinear') # [bs,1,24,24]
         combi_5 = torch.cat((cus_sample(x1, mode="scale", factors=2), x2), 1) # [bs,128,24,24]
         combi_5 = self.combi_layer_5(combi_5) # [bs,64,24,24]
         ra4_feat = self.RS5(combi_5, guidance_g)
@@ -450,27 +454,36 @@ class ZoomNet(BasicModelClass):
         guidance_5 = F.interpolate(S_5, scale_factor=2, mode='bilinear')
         combi_4 = torch.cat((cus_sample(x1, mode="scale", factors=4), cus_sample(x2, mode="scale", factors=2), x3), 1) # [bs,192,48,48]
         combi_4 = self.combi_layer_4(combi_4) # [bs,64,48,48]
-        ra3_feat = self.RS4(combi_4, guidance_5)
-        S_4 = ra3_feat + guidance_5
+        ra4_feat = self.RS4(combi_4, guidance_5)
+        S_4 = ra4_feat + guidance_5
         S_4_pred = F.interpolate(S_4, scale_factor=8, mode='bilinear')  # Sup-3 (bs, 1, 48, 48) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 3 ----
         guidance_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
         combi_3 = torch.cat((cus_sample(x2, mode="scale", factors=4), cus_sample(x3, mode="scale", factors=2), x4), 1) # [bs,192,96,96]
         combi_3 = self.combi_layer_3(combi_3) # [bs,64,96,96]
-        ra2_feat = self.RS3(combi_3, guidance_4)
-        S_3 = ra2_feat + guidance_4
+        ra3_feat = self.RS3(combi_3, guidance_4)
+        S_3 = ra3_feat + guidance_4
         S_3_pred = F.interpolate(S_3, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
         # ---- reverse stage 2 ----
         guidance_3 = F.interpolate(S_3, scale_factor=2, mode='bilinear')
-        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=4), cus_sample(x4, mode="scale", factors=2)), 1) # [bs,1,192,192]
+        combi_2 = torch.cat((cus_sample(x3, mode="scale", factors=4), cus_sample(x4, mode="scale", factors=2), x5), 1) # [bs,1,192,192]
         combi_2 = self.combi_layer_2(combi_2) # [bs,64,192,192]
-        ra1_feat = self.RS2(combi_2, guidance_3)
-        S_2 = ra1_feat + guidance_3
-
-        #S_2 work as a second coarse map -> cal loss of S_2_pred
+        ra2_feat = self.RS2(combi_2, guidance_3)
+        S_2 = ra2_feat + guidance_3
+        # S_2 work as a second coarse map -> cal loss of S_2_pred
         S_2_pred = F.interpolate(S_2, scale_factor=2, mode='bilinear')  # Sup-5 (bs, 1, 192, 192) -> (bs, 1, 384, 384)
+
+        # ---- reverse stage 1 ----
+        guidance_2 = F.interpolate(S_2, scale_factor=2, mode='bilinear')
+        combi_1 = torch.cat((cus_sample(x4, mode="scale", factors=4), cus_sample(x5, mode="scale", factors=2)),
+                            1)  # [bs,1,192,192]
+        combi_1 = self.combi_layer_1(combi_1)  # [bs,64,192,192]
+        ra1_feat = self.RS1(combi_1, guidance_2)
+        S_1 = ra1_feat + guidance_2
+
+
 
         '''
         high_S_4 = F.interpolate(S_4, scale_factor=2, mode='bilinear')
@@ -484,9 +497,9 @@ class ZoomNet(BasicModelClass):
         # S_1 = ra0_feat + guidance_2
         # S_1_pred = F.interpolate(S_1, scale_factor=2, mode='bilinear')   # Sup-4 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
 
-        S_2_map = F.interpolate(S_2, scale_factor=0.125, mode='bilinear') 
+        S_1_map = F.interpolate(S_1, scale_factor=0.125/2, mode='bilinear')
        # S_5 = torch.cat((S_2_map, S_5),1)
-        _, M_5 = self.final_comb_5(S_2_map, S_5)
+        _, M_5 = self.final_comb_5(S_1_map, S_5)
         M_5_pred = F.interpolate(M_5, scale_factor=16, mode='bilinear')
         
         M_5 = F.interpolate(M_5, scale_factor=2, mode='bilinear')
@@ -503,10 +516,15 @@ class ZoomNet(BasicModelClass):
        
 	# S_2 = torch.cat((S_3, S_2),1)
         _, M_2 = self.final_comb_2(M_3, S_2)
-        M_1_pred = F.interpolate(M_2, scale_factor=2, mode='bilinear')
+        M_2_pred = F.interpolate(M_2, scale_factor=2, mode='bilinear')
+
+        M_2 = F.interpolate(M_2, scale_factor=2, mode='bilinear')
+
+        _, M_1 = self.final_comb_2(M_2, S_1)
+        M_1_pred = M_1
 
         # return dict(seg=logits)
-        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, M_5=M_5_pred, M_4=M_4_pred, M_3=M_3_pred, M_1=M_1_pred)
+        return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, M_5=M_5_pred, M_4=M_4_pred, M_3=M_3_pred, M_2=M_2_pred, M_1=M_1_pred)
 
         # return dict(S_g=S_g_pred, S_5=S_5_pred, S_4=S_4_pred, S_3=S_3_pred, S_2=S_2_pred, S_1=S_1_pred)
 
@@ -586,13 +604,11 @@ class ZoomNet(BasicModelClass):
 
     def get_grouped_params(self):
         param_groups = {}
-        param_groups.setdefault("pretrained", [])
-        param_groups.setdefault("fixed", [])
         for name, param in self.named_parameters():
-            if name.startswith("backbone"):
+            if name.startswith("shared_encoder.layer"):
                 param_groups.setdefault("pretrained", []).append(param)
-            # elif name.startswith("backbone"):
-            #     param_groups.setdefault("fixed", []).append(param)
+            elif name.startswith("shared_encoder."):
+                param_groups.setdefault("fixed", []).append(param)
             else:
                 param_groups.setdefault("retrained", []).append(param)
         return param_groups
