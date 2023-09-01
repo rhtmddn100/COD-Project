@@ -18,18 +18,14 @@ class Channel_Matching(nn.Module):
         self.c4_down = nn.Sequential(ConvBNReLU(320, out_c, 3, 1, 1))
         self.c3_down = nn.Sequential(ConvBNReLU(128, out_c, 3, 1, 1))
         self.c2_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
-        # self.c1_down = nn.Sequential(ConvBNReLU(64, out_c, 3, 1, 1))
 
     def forward(self, xs):
-        # assert isinstance(xs, (tuple, list))
         assert len(xs) == 4
         c2, c3, c4, c5 = xs
         c5 = self.c5_down(c5)
         c4 = self.c4_down(c4)
         c3 = self.c3_down(c3)
         c2 = self.c2_down(c2)
-        # c1 = self.c1_down(c1)
-        # return c5, c4, c3, c2, c1
         return c5, c4, c3, c2
 
 
@@ -43,29 +39,10 @@ class GA(nn.Module):
         self.score = nn.Conv2d(channel, 1, 3, padding=1)
 
     def forward(self, x, y):
-        if self.group == 1:
-            x_cat = torch.cat((x, y), 1)
-        elif self.group == 2:
-            xs = torch.chunk(x, 2, dim=1)
-            x_cat = torch.cat((xs[0], y, xs[1], y), 1)
-        elif self.group == 4:
-            xs = torch.chunk(x, 4, dim=1)
-            x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y), 1)
-        elif self.group == 8:
-            xs = torch.chunk(x, 8, dim=1)
-            x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y), 1)
-        elif self.group == 16:
-            xs = torch.chunk(x, 16, dim=1)
-            x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y,
-            xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y), 1)
-        elif self.group == 32:
-            xs = torch.chunk(x, 32, dim=1)
-            x_cat = torch.cat((xs[0], y, xs[1], y, xs[2], y, xs[3], y, xs[4], y, xs[5], y, xs[6], y, xs[7], y,
-            xs[8], y, xs[9], y, xs[10], y, xs[11], y, xs[12], y, xs[13], y, xs[14], y, xs[15], y,
-            xs[16], y, xs[17], y, xs[18], y, xs[19], y, xs[20], y, xs[21], y, xs[22], y, xs[23], y,
-            xs[24], y, xs[25], y, xs[26], y, xs[27], y, xs[28], y, xs[29], y, xs[30], y, xs[31], y), 1)
-        else:
+        if self.group < 1:
             raise Exception("Invalid Channel")
+        xs = torch.chunk(x, self.group, dim=1)
+        x_cat = torch.cat([elem for sublist in zip(xs, [y] * self.group) for elem in sublist], dim=1)
 
         x = x + self.conv(x_cat)
         y = y + self.score(x)
@@ -196,34 +173,8 @@ class ZoomNet(BasicModelClass):
         self.Retouch1 = CCBR()
 
 
-        '''
-        self.final_comb_5 = nn.Sequential(
-		    ConvBNReLU(2, 1, kernel_size=1),
-			ConvBNReLU(1, 1, kernel_size=1) )
-        self.final_comb_4 = nn.Sequential(
-		    ConvBNReLU(2, 1, kernel_size=1),
-			ConvBNReLU(1, 1, kernel_size=1)	)
-        self.final_comb_3 = nn.Sequential(
-		    ConvBNReLU(2, 1, kernel_size=1),
-			ConvBNReLU(1, 1, kernel_size=1))
-        self.final_comb_2 = nn.Sequential(
-		    ConvBNReLU(2, 1, kernel_size=1),
-			ConvBNReLU(1, 1, kernel_size=1))
-        '''
-
-    # def encoder_translayer(self, x):
-    #     pvt = self.backbone(x)
-        
-    #     trans_feats = self.CM(pvt)
-    #     return trans_feats
-
     def body(self, s_scale):
 
-        # Feature Encoder
-            # shape => s_scale: [2,3,384,384], m_scale: [2,3,576,576], l_scale: [2,3,768,768]
-            # s_trans_feats (tuple type) : 0:[2,64,12,12}, 1:[2,64,24,24], 2:[2,64,48,48], 3:[2,64,96,96]
-            # m_trans_feats (tuple type) : 0:[2,64,18,18}, 1:[2,64,36,36], 2:[2,64,72,72], 3:[2,64,144,144]
-        # s_trans_feats = self.encoder_translayer(s_scale) # x1.0
         pvt = self.backbone(s_scale)
 
 
@@ -320,21 +271,16 @@ class ZoomNet(BasicModelClass):
         return output["M_1"]
 
     def cal_loss(self, all_preds: dict, gts: torch.Tensor, method="cos", iter_percentage: float = 0):
-        # ual_coef = get_coef(iter_percentage, method)
 
         losses = []
         loss_str = []
-        # for main
-        #loss function: weighted BCE for each layer + ual loss for the last layer
         for name, preds in all_preds.items():
             resized_gts = cus_sample(gts, mode="size", factors=preds.shape[2:])
 
             sod_loss = F.binary_cross_entropy_with_logits(input=preds, target=resized_gts, reduction="none")
             weit = 1 + 5 * torch.abs(F.avg_pool2d(resized_gts, kernel_size=31, stride=1, padding=15) - resized_gts)
-            # wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
             w_sod_loss = (weit * sod_loss).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
             w_sod_loss = w_sod_loss
-            # losses.append(w_sod_loss)
 
             preds = torch.sigmoid(preds)
             inter = ((preds * resized_gts) * weit).sum(dim=(2, 3))
@@ -355,8 +301,6 @@ class ZoomNet(BasicModelClass):
         for name, param in self.named_parameters():
             if name.startswith("backbone"):
                 param_groups.setdefault("pretrained", []).append(param)
-            # elif name.startswith("backbone"):
-            #     param_groups.setdefault("fixed", []).append(param)
             else:
                 param_groups.setdefault("retrained", []).append(param)
         return param_groups
