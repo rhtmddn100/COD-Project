@@ -15,7 +15,7 @@ train = dict(
     use_amp=True,
     num_epochs=100,
     epoch_based=True,
-    lr=0.01,
+    lr=0.005,
     optimizer=dict(
         mode="sgd",
         set_to_none=True,
@@ -57,7 +57,7 @@ datasets = dict(
     test=dict(
         dataset_type="msi_cod_te",
         shape=dict(h=768, w=768),
-        path=["camo_te", "chameleon", "cod10k_te", "nc4k"],
+        path=["camo_te", "cod10k_te", "nc4k"],
         interp_cfg=dict(),
     ),
 )

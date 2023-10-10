@@ -246,7 +246,7 @@
     }
   },
   "cod10k_camo_tr": {
-    "root": "./TrainDataset/cod10k_tr",
+    "root": "../../TrainDataset/",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -261,7 +261,7 @@
     }
   },
   "camo_te": {
-    "root": "./TestDataset/CAMO",
+    "root": "../../TestDataset/CAMO",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -276,7 +276,7 @@
     }
   },
   "chameleon": {
-    "root": "./TestDataset/CHAMELEON",
+    "root": "../../TestDataset/CHAMELEON",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -302,7 +302,7 @@
     }
   },
   "cod10k_te": {
-    "root": "./TestDataset/COD10K",
+    "root": "../../TestDataset/COD10K",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -318,7 +318,7 @@
   },
 
   "nc4k": {
-    "root": "./TestDataset/NC4K",
+    "root": "../../TestDataset/NC4K",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -333,7 +333,7 @@
     }
   },
   "coco": {
-    "root": "./TestDataset/COCO",
+    "root": "../../TestDataset/COCO",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
@@ -348,7 +348,7 @@
     }
   },
   "voc": {
-    "root": "./TestDataset/pascalVOC",
+    "root": "../../TestDataset/pascalVOC",
     "image": {
       "path": "Imgs",
       "suffix": ".jpg"
