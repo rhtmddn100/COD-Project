@@ -37,17 +37,22 @@ class CALayer(nn.Module):
         super(CALayer, self).__init__()
         # global average pooling: feature --> point
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
         # feature channel downscale and upscale --> channel weight
         self.conv_du = nn.Sequential(
             nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=bias),
             nn.ReLU(inplace=True),
             nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=bias),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
+        self.act = nn.Sigmoid()
 
     def forward(self, x):
-        y = self.avg_pool(x)
-        y = self.conv_du(y)
+        y1 = self.avg_pool(x)
+        y2 = self.max_pool(x)
+        y1 = self.conv_du(y1)
+        y2 = self.conv_du(y2)
+        y = self.act(y1 + y2)
         return x * y
 
 ## Channel Attention Block (CAB)
@@ -67,6 +72,48 @@ class CAB(nn.Module):
         res = self.CA(res)
         res += x
         return res
+
+
+## Spatial Attention Layer
+class SALayer(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SALayer, self).__init__()
+
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=(kernel_size // 2), bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x1 = torch.cat([avg_out, max_out], dim=1)
+        x1 = self.conv1(x1)
+        return x * self.sigmoid(x1)
+
+## Spatial Attention Block (SAB)
+class SAB(nn.Module):
+    def __init__(self, n_feat, kernel_size, bias, act):
+        super(SAB, self).__init__()
+        modules_body = []
+        modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=bias))
+        modules_body.append(act)
+        modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=bias))
+
+        modules_body2 = []
+        modules_body2.append(nn.Conv2d(n_feat, n_feat, 3, padding=1, bias=bias))
+        modules_body2.append(act)
+        modules_body2.append(nn.Conv2d(n_feat, 1, 3, padding=1, bias=bias))
+
+        self.SA = SALayer()
+        self.body = nn.Sequential(*modules_body)
+        self.body2 = nn.Sequential(*modules_body2)
+
+    def forward(self, x):
+        x, f = x[0], x[1]
+        f = self.body(f)
+        f = self.SA(f)
+        res = self.body2(f)
+        x += res
+        return [x, f]
 
 
 class GA(nn.Module):
@@ -89,7 +136,6 @@ class GA(nn.Module):
 
         return x, y
 
-
 class GAB(nn.Module):
     def __init__(self, channel):
         super(GAB, self).__init__()
@@ -99,6 +145,7 @@ class GAB(nn.Module):
         self.strong_gra = GA(channel, 2)
 
     def forward(self, x, y):
+        # y: image, x: feature
         # reverse guided block
         y = torch.sigmoid(y)
 
@@ -106,9 +153,9 @@ class GAB(nn.Module):
         x, y = self.weak_gra(x, y)
         x, y = self.little_gra(x, y)
         x, y = self.medium_gra(x, y)
-        _, y = self.strong_gra(x, y)
+        x, y = self.strong_gra(x, y)
 
-        return y
+        return y, x
 
 
 
@@ -147,10 +194,10 @@ class ZoomNet(BasicModelClass):
 
         ##Sketch Decoder##
         self.CM = Channel_Matching(out_c=64)  # [c5, c4, c3, c2]
-        self.s4 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
-        self.s3 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
-        self.s2 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
-        self.s1 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(2)]
+        self.s4 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.s3 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.s2 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.s1 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
         self.s4 = nn.Sequential(*self.s4)
         self.s3 = nn.Sequential(*self.s3)
         self.s2 = nn.Sequential(*self.s2)
@@ -169,10 +216,18 @@ class ZoomNet(BasicModelClass):
         self.Refine1 = GAB(64)
 
         ##Retoouch Decoder##
-        self.Retouch4 = CCBR()
-        self.Retouch3 = CCBR()
-        self.Retouch2 = CCBR()
-        self.Retouch1 = CCBR()
+        # self.Retouch4 = CCBR()
+        # self.Retouch3 = CCBR()
+        # self.Retouch2 = CCBR()
+        # self.Retouch1 = CCBR()
+        self.Retouch4 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.Retouch3 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.Retouch2 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.Retouch1 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
+        self.Retouch4 = nn.Sequential(*self.Retouch4)
+        self.Retouch3 = nn.Sequential(*self.Retouch3)
+        self.Retouch2 = nn.Sequential(*self.Retouch2)
+        self.Retouch1 = nn.Sequential(*self.Retouch1)
 
 
     def body(self, s_scale):
@@ -202,7 +257,7 @@ class ZoomNet(BasicModelClass):
         guidance_5 = F.interpolate(p5, scale_factor=0.25, mode='bilinear') # [bs,1,24,24]
         g4 = torch.cat((cus_sample(f4, mode="scale", factors=2), f3), 1) # [bs,128,24,24]
         g4 = self.combi_layer_4(g4) # [bs,64,24,24]
-        ra4_feat = self.Refine4(g4, guidance_5)
+        ra4_feat, feature4 = self.Refine4(g4, guidance_5)
         p4 = ra4_feat + guidance_5
         p4_pred = F.interpolate(p4, scale_factor=16, mode='bilinear')  # Sup-2 (bs, 1, 24, 24) -> (bs, 1, 384, 384)
 
@@ -210,7 +265,7 @@ class ZoomNet(BasicModelClass):
         guidance_4 = F.interpolate(p4, scale_factor=2, mode='bilinear')
         g3 = torch.cat((cus_sample(f4, mode="scale", factors=4), cus_sample(f3, mode="scale", factors=2), f2), 1) # [bs,192,48,48]
         g3 = self.combi_layer_3(g3) # [bs,64,48,48]
-        ra3_feat = self.Refine3(g3, guidance_4)
+        ra3_feat, feature3 = self.Refine3(g3, guidance_4)
         p3 = ra3_feat + guidance_4
         p3_pred = F.interpolate(p3, scale_factor=8, mode='bilinear')  # Sup-3 (bs, 1, 48, 48) -> (bs, 1, 384, 384)
 
@@ -218,7 +273,7 @@ class ZoomNet(BasicModelClass):
         guidance_3 = F.interpolate(p3, scale_factor=2, mode='bilinear')
         g2 = torch.cat((cus_sample(f3, mode="scale", factors=4), cus_sample(f2, mode="scale", factors=2), f1), 1) # [bs,192,96,96]
         g2 = self.combi_layer_2(g2) # [bs,64,96,96]
-        ra2_feat = self.Refine2(g2, guidance_3)
+        ra2_feat, feature2 = self.Refine2(g2, guidance_3)
         p2 = ra2_feat + guidance_3
         p2_pred = F.interpolate(p2, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
@@ -226,26 +281,26 @@ class ZoomNet(BasicModelClass):
         guidance_2 = F.interpolate(p2, scale_factor=2, mode='bilinear')
         g1 = torch.cat((cus_sample(f2, mode="scale", factors=4), cus_sample(f1, mode="scale", factors=2)), 1) # [bs,1,192,192]
         g1 = self.combi_layer_1(g1) # [bs,64,192,192]
-        ra1_feat = self.Refine1(g1, guidance_2)
+        ra1_feat, feature1 = self.Refine1(g1, guidance_2)
         p1 = ra1_feat + guidance_2
         p1_pred = F.interpolate(p1, scale_factor=2, mode='bilinear')  # Sup-5 (bs, 1, 192, 192) -> (bs, 1, 384, 384)
 
 
         ## Retouch Decoder ##
-        p1_map = F.interpolate(p1, scale_factor=0.125, mode='bilinear') 
-        M_4 = self.Retouch4(p1_map, p4)
+        p1_map = F.interpolate(p1, scale_factor=0.125, mode='bilinear')
+        M_4, _ = self.Retouch4([p1_map, feature4])
         M_4_pred = F.interpolate(M_4, scale_factor=16, mode='bilinear')
         
         M_4 = F.interpolate(M_4, scale_factor=2, mode='bilinear')
-        M_3 = self.Retouch3(M_4, p3)
+        M_3, _ = self.Retouch3([M_4, feature3])
         M_3_pred = F.interpolate(M_3, scale_factor=8, mode='bilinear')
 
         M_3 = F.interpolate(M_3, scale_factor=2, mode='bilinear')
-        M_2 = self.Retouch2(M_3, p2)
+        M_2, _ = self.Retouch2([M_3, feature2])
         M_2_pred = F.interpolate(M_2, scale_factor=4, mode='bilinear')
 	
         M_2 = F.interpolate(M_2, scale_factor=2, mode='bilinear')
-        M_1 = self.Retouch1(M_2, p1)
+        M_1, _ = self.Retouch1([M_2, feature1])
         M_1_pred = F.interpolate(M_1, scale_factor=2, mode='bilinear')
 
 
@@ -306,5 +361,3 @@ class ZoomNet(BasicModelClass):
             else:
                 param_groups.setdefault("retrained", []).append(param)
         return param_groups
-
-)
