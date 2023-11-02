@@ -61,8 +61,10 @@ class CAB(nn.Module):
         super(CAB, self).__init__()
         modules_body = []
         modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=bias))
+        modules_body.append(nn.BatchNorm2d(n_feat))
         modules_body.append(act)
         modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=bias))
+        modules_body.append(nn.BatchNorm2d(n_feat))
 
         self.CA = CALayer(n_feat, reduction, bias=bias)
         self.body = nn.Sequential(*modules_body)
@@ -95,11 +97,14 @@ class SAB(nn.Module):
         super(SAB, self).__init__()
         modules_body = []
         modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=bias))
+        modules_body.append(nn.BatchNorm2d(n_feat))
         modules_body.append(act)
         modules_body.append(nn.Conv2d(n_feat, n_feat, kernel_size, padding=(kernel_size // 2), bias=bias))
+        modules_body.append(nn.BatchNorm2d(n_feat))
 
         modules_body2 = []
         modules_body2.append(nn.Conv2d(n_feat, n_feat, 3, padding=1, bias=bias))
+        modules_body.append(nn.BatchNorm2d(n_feat))
         modules_body2.append(act)
         modules_body2.append(nn.Conv2d(n_feat, 1, 3, padding=1, bias=bias))
 
@@ -304,8 +309,8 @@ class ZoomNet(BasicModelClass):
         M_1_pred = F.interpolate(M_1, scale_factor=2, mode='bilinear')
 
 
-        return dict(p5=Coarse_pred, p4=p4_pred, p3=p3_pred, p2=p2_pred, p1=p1_pred, M_4=M_4_pred, M_3=M_3_pred, M_2=M_2_pred, M_1=M_1_pred)
-
+        #return dict(p5=Coarse_pred, p4=p4_pred, p3=p3_pred, p2=p2_pred, p1=p1_pred, M_4=M_4_pred, M_3=M_3_pred, M_2=M_2_pred, M_1=M_1_pred)
+        return dict(p5=Coarse_pred, p1=p1_pred, M_1=M_1_pred)
 
 
     def train_forward(self, data, **kwargs):

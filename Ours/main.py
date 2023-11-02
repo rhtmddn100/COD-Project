@@ -345,7 +345,7 @@ def main():
     ### Multi GPU ###
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = torch.nn.DataParallel(model, device_ids=[0], output_device=0).to(device)    
+    model = torch.nn.DataParallel(model, device_ids=[0,1,2,3], output_device=[0,1,2,3]).to(device)    
     #################
 
 
