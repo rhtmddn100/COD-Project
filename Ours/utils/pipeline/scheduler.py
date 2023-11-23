@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2020/12/19
-# @Author  : Lart Pang
-# @GitHub  : https://github.com/lartpang
 
 import copy
 import math
@@ -269,7 +265,6 @@ class Scheduler:
                 coef = self.lr_coef_func(curr_idx - self.num_warmup_iters)
             else:
                 if curr_idx % self.epoch_length == 0 or curr_idx == self.num_warmup_iters:
-                    # warmup结束后尚未开始按照epoch进行调整的学习率调整，此时需要将系数调整为最大。
                     coef = self.lr_coef_func((curr_idx - self.num_warmup_iters) // self.epoch_length)
         if coef is not None:
             self.last_lr_coef = coef

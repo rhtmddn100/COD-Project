@@ -1,5 +1,5 @@
 train = dict(
-    batch_size=16,
+    batch_size=8,
     num_workers=0,
     use_amp=True,
     num_epochs=100,
@@ -12,7 +12,7 @@ train = dict(
         group_mode="r3",  # ['trick', 'r3', 'all', 'finetune'],
         cfg=dict(),
     ),
-    grad_acc_step=1,  # gradient accumulation
+    grad_acc_step=2,  # gradient accumulation
     sche_usebatch=True,
     scheduler=dict(
         warmup=dict(

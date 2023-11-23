@@ -169,7 +169,7 @@ class ENTO(BasicModelClass):
         super().__init__()
 
         ##Feature Encoder##
-        self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
+        self.backbone = pvt_v2_b4()  # [64, 128, 320, 512]
         path = './pretrained_pvt/pvt_v2_b4.pth'
         save_model = torch.load(path)
         model_dict = self.backbone.state_dict()

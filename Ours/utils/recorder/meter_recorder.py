@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2020/7/4
-# @Author  : Lart Pang
-# @GitHub  : https://github.com/lartpang
 
 
 class AvgMeter(object):
