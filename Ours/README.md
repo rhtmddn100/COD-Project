@@ -34,5 +34,5 @@ Backbone model paper is [PVT v2: Improved Baselines with Pyramid Vision Transfor
 You can use our default configuration, like this:
 
 ```shell
-$ python main.py --model-name=ZoomNet --config=configs/zoomnet/zoomnet.py --datasets-info ./configs/_base_/dataset/dataset_configs.json --info demo
+$ python main.py --model-name=ENTO --config=configs/ento/ento.py --datasets-info ./configs/_base_/dataset/dataset_configs.json --info demo
 ```
