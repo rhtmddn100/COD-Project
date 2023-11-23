@@ -336,6 +336,5 @@ if __name__ == "__main__":
     )
     print(sche)
     sche.plot_lr_coef_curve(
-        # save_path="/home/lart/Coding/SOD.torch",
         show=True,
     )
