@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2021/6/1
-# @Author  : Lart Pang
-# @GitHub  : https://github.com/lartpang
 
 import ast
 import os.path as osp

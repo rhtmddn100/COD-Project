@@ -8,7 +8,7 @@ from methods.module.base_model import BasicModelClass
 from methods.module.conv_block import ConvBNReLU
 from utils.builder import MODELS
 from utils.ops import cus_sample
-from methods.module.pvtv2 import pvt_v2_b2
+from methods.module.pvtv2 import pvt_v2_b2, pvt_v2_b4
 
 
 class Channel_Matching(nn.Module):
@@ -163,76 +163,46 @@ class GAB(nn.Module):
         return y, x
 
 
-
-
-class CCBR(nn.Module):
-    def __init__(self):
-        super(CCBR, self).__init__()
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(2, 1, 3, padding=1), nn.ReLU(True),
-        )
-        self.conv2 = nn.Conv2d(1, 1, 3, padding=1)
-    
-    def forward(self, x, y):
-        x_cat = torch.cat((x, y), 1)
-        x = x + self.conv1(x_cat)
-        y = y + self.conv2(x)
-
-        return y
-
-
-
-
 @MODELS.register()
-class ZoomNet(BasicModelClass):
+class ENTO(BasicModelClass):
     def __init__(self):
         super().__init__()
 
         ##Feature Encoder##
-        self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = './pretrained_pvt/pvt_v2_b2.pth'
+        self.backbone = pvt_v2_b4()  # [64, 128, 320, 512]
+        path = './pretrained_pvt/pvt_v2_b4.pth'
         save_model = torch.load(path)
         model_dict = self.backbone.state_dict()
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
         model_dict.update(state_dict)
         self.backbone.load_state_dict(model_dict)
 
-        ##Sketch Decoder##
+        ##Enrich Decoder##
         self.CM = Channel_Matching(out_c=64)  # [c5, c4, c3, c2]
-        self.s4 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.s3 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.s2 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.s1 = [CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.s4 = nn.Sequential(*self.s4)
-        self.s3 = nn.Sequential(*self.s3)
-        self.s2 = nn.Sequential(*self.s2)
-        self.s1 = nn.Sequential(*self.s1)
+        self.CAB4 = nn.Sequential(*[CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)])
+        self.CAB3 = nn.Sequential(*[CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)])
+        self.CAB2 = nn.Sequential(*[CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)])
+        self.CAB1 = nn.Sequential(*[CAB(64, 3, 4, bias=False, act=nn.PReLU()) for _ in range(6)])
         self.out_layer_00 = ConvBNReLU(64, 64, 3, 1, 1)
         self.out_layer_01 = nn.Conv2d(64, 1, 1)
 
-        ##Refine Decoder##
         self.combi_layer_4 = ConvBNReLU(128, 64, 3, 1, 1)
         self.combi_layer_3 = ConvBNReLU(192, 64, 3, 1, 1)
         self.combi_layer_2 = ConvBNReLU(192, 64, 3, 1, 1)
         self.combi_layer_1 = ConvBNReLU(128, 64, 3, 1, 1)
-        self.Refine4 = GAB(64)
-        self.Refine3 = GAB(64)
-        self.Refine2 = GAB(64)
-        self.Refine1 = GAB(64)
 
-        ##Retoouch Decoder##
-        # self.Retouch4 = CCBR()
-        # self.Retouch3 = CCBR()
-        # self.Retouch2 = CCBR()
-        # self.Retouch1 = CCBR()
-        self.Retouch4 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.Retouch3 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.Retouch2 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.Retouch1 = [SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)]
-        self.Retouch4 = nn.Sequential(*self.Retouch4)
-        self.Retouch3 = nn.Sequential(*self.Retouch3)
-        self.Retouch2 = nn.Sequential(*self.Retouch2)
-        self.Retouch1 = nn.Sequential(*self.Retouch1)
+        ##Base Decoder##
+
+        self.GAB4 = GAB(64)
+        self.GAB3 = GAB(64)
+        self.GAB2 = GAB(64)
+        self.GAB1 = GAB(64)
+
+        ##Retouch Decoder##
+        self.SAB4 = nn.Sequential(*[SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)])
+        self.SAB3 = nn.Sequential(*[SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)])
+        self.SAB2 = nn.Sequential(*[SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)])
+        self.SAB1 = nn.Sequential(*[SAB(64, 3, bias=False, act=nn.PReLU()) for _ in range(6)])
 
 
     def body(self, s_scale):
@@ -244,70 +214,63 @@ class ZoomNet(BasicModelClass):
         #channel matching
         trans_feats = self.CM(pvt)
 
-        f4 = self.s4(trans_feats[0])  # [bs,64,12,12]
+        f4 = self.CAB4(trans_feats[0])  # [bs,64,12,12]
         f3 = cus_sample(f4, mode="scale", factors=2)  # [bs,64,24,24]
-        f3 = self.s3(f3 + trans_feats[1])  # [bs,64,24,24]
+        f3 = self.CAB3(f3 + trans_feats[1])  # [bs,64,24,24]
         f2 = cus_sample(f3, mode="scale", factors=2)  # [bs,64,48,48]
-        f2 = self.s2(f2 + trans_feats[2])  # [bs,64,48,48]
+        f2 = self.CAB2(f2 + trans_feats[2])  # [bs,64,48,48]
         f1 = cus_sample(f2, mode="scale", factors=2)  # [bs,64,96,96]
-        f1 = self.s1(f1 + trans_feats[3])  # [bs,64,96,96]
+        f1 = self.CAB1(f1 + trans_feats[3])  # [bs,64,96,96]
 
         # coarse prediction map
         p5 = self.out_layer_01(self.out_layer_00(f1)) # [bs,1,96,96]
         Coarse_pred = F.interpolate(p5, scale_factor=4, mode='bilinear') # [bs,1,384,384]
 
 
-        ## Refine Decoder ##
+        ## Base Decoder ##
         # ---- level 4 ----
         guidance_5 = F.interpolate(p5, scale_factor=0.25, mode='bilinear') # [bs,1,24,24]
         g4 = torch.cat((cus_sample(f4, mode="scale", factors=2), f3), 1) # [bs,128,24,24]
         g4 = self.combi_layer_4(g4) # [bs,64,24,24]
-        ra4_feat, feature4 = self.Refine4(g4, guidance_5)
+        ra4_feat, feature4 = self.GAB4(g4, guidance_5)
         p4 = ra4_feat + guidance_5
-        p4_pred = F.interpolate(p4, scale_factor=16, mode='bilinear')  # Sup-2 (bs, 1, 24, 24) -> (bs, 1, 384, 384)
 
         # ---- level 3 ----
         guidance_4 = F.interpolate(p4, scale_factor=2, mode='bilinear')
         g3 = torch.cat((cus_sample(f4, mode="scale", factors=4), cus_sample(f3, mode="scale", factors=2), f2), 1) # [bs,192,48,48]
         g3 = self.combi_layer_3(g3) # [bs,64,48,48]
-        ra3_feat, feature3 = self.Refine3(g3, guidance_4)
+        ra3_feat, feature3 = self.GAB3(g3, guidance_4)
         p3 = ra3_feat + guidance_4
-        p3_pred = F.interpolate(p3, scale_factor=8, mode='bilinear')  # Sup-3 (bs, 1, 48, 48) -> (bs, 1, 384, 384)
 
         # ---- level 2 ----
         guidance_3 = F.interpolate(p3, scale_factor=2, mode='bilinear')
         g2 = torch.cat((cus_sample(f3, mode="scale", factors=4), cus_sample(f2, mode="scale", factors=2), f1), 1) # [bs,192,96,96]
         g2 = self.combi_layer_2(g2) # [bs,64,96,96]
-        ra2_feat, feature2 = self.Refine2(g2, guidance_3)
+        ra2_feat, feature2 = self.GAB2(g2, guidance_3)
         p2 = ra2_feat + guidance_3
-        p2_pred = F.interpolate(p2, scale_factor=4, mode='bilinear')   # Sup-4 (bs, 1, 96, 96) -> (bs, 1, 384, 384)
 
         # ---- level 1 ----
         guidance_2 = F.interpolate(p2, scale_factor=2, mode='bilinear')
         g1 = torch.cat((cus_sample(f2, mode="scale", factors=4), cus_sample(f1, mode="scale", factors=2)), 1) # [bs,1,192,192]
         g1 = self.combi_layer_1(g1) # [bs,64,192,192]
-        ra1_feat, feature1 = self.Refine1(g1, guidance_2)
+        ra1_feat, feature1 = self.GAB1(g1, guidance_2)
         p1 = ra1_feat + guidance_2
         p1_pred = F.interpolate(p1, scale_factor=2, mode='bilinear')  # Sup-5 (bs, 1, 192, 192) -> (bs, 1, 384, 384)
 
 
         ## Retouch Decoder ##
         p1_map = F.interpolate(p1, scale_factor=0.125, mode='bilinear')
-        M_4, _ = self.Retouch4([p1_map, feature4])
-        M_4_pred = F.interpolate(M_4, scale_factor=16, mode='bilinear')
-        
+        M_4, _ = self.SAB4([p1_map, feature4])
+
         M_4 = F.interpolate(M_4, scale_factor=2, mode='bilinear')
-        M_3, _ = self.Retouch3([M_4, feature3])
-        M_3_pred = F.interpolate(M_3, scale_factor=8, mode='bilinear')
+        M_3, _ = self.SAB3([M_4, feature3])
 
         M_3 = F.interpolate(M_3, scale_factor=2, mode='bilinear')
-        M_2, _ = self.Retouch2([M_3, feature2])
-        M_2_pred = F.interpolate(M_2, scale_factor=4, mode='bilinear')
-	
-        M_2 = F.interpolate(M_2, scale_factor=2, mode='bilinear')
-        M_1, _ = self.Retouch1([M_2, feature1])
-        M_1_pred = F.interpolate(M_1, scale_factor=2, mode='bilinear')
+        M_2, _ = self.SAB2([M_3, feature2])
 
+        M_2 = F.interpolate(M_2, scale_factor=2, mode='bilinear')
+        M_1, _ = self.SAB1([M_2, feature1])
+        M_1_pred = F.interpolate(M_1, scale_factor=2, mode='bilinear')
 
         #return dict(p5=Coarse_pred, p4=p4_pred, p3=p3_pred, p2=p2_pred, p1=p1_pred, M_4=M_4_pred, M_3=M_3_pred, M_2=M_2_pred, M_1=M_1_pred)
         return dict(p5=Coarse_pred, p1=p1_pred, M_1=M_1_pred)

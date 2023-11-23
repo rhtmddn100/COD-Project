@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2020/12/19
-# @Author  : Lart Pang
-# @GitHub  : https://github.com/lartpang
 
 import os
 
@@ -80,13 +76,6 @@ def save_weight(save_path, model):
 
 
 def load_specific_params(load_path, names):
-    """
-    从保存节点恢复参数
-
-    Args:
-        load_path (str): 模型存放路径
-        names (list): 需要载入的参数名字 [model, optimizer, scheduler, scaler, start_epoch]
-    """
     _name_mapping = dict(
         model="net_state",
         optimizer="opti_state",
@@ -113,13 +102,6 @@ def load_specific_params(load_path, names):
 
 
 def load_weight(load_path, model: nn.Module):
-    """
-    从保存节点恢复模型
-
-    Args:
-        load_path (str): 模型存放路径
-        model: your model
-    """
     assert os.path.exists(load_path), load_path
 
     print(f"Loading weight '{load_path}'")
