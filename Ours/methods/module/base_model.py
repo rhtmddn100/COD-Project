@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2021/4/14
-# @Author  : Lart Pang
-# @GitHub  : https://github.com/lartpang
 import abc
 
 import torch.nn as nn

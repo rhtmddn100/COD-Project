@@ -15,7 +15,7 @@ python test.py --config ./configs/zoomnet/zoomnet.py \
     --save-path ./output/ForSharing/COD_Results_1
 
 #echo 'For SOD'
-#python test.py --config ./configs/zoomnet/sod_zoomnet.py \
+#python test.py --config ./configs/ento/sod_zoomnet.py \
 #    --model-name ZoomNet \
 #    --batch-size 22 \
 #    --load-from ./output/ForSharing/sod_zoomnet_r50_bs22_e50_2022-03-04_fixed.pth \

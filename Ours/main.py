@@ -17,7 +17,7 @@ import torch.nn as nn
 
 def parse_config():
     parser = argparse.ArgumentParser("Training and evaluation script")
-    parser.add_argument("--config", default="./configs/zoomnet/zoomnet.py", type=str)
+    parser.add_argument("--config", default="./configs/ento/ento.py", type=str)
     parser.add_argument("--datasets-info", default="./configs/_base_/dataset/dataset_configs.json", type=str)
     parser.add_argument("--model-name", type=str)
     parser.add_argument("--batch-size", type=int)

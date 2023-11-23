@@ -7,7 +7,7 @@ _base_ = [
 has_test = True
 deterministic = True
 use_custom_worker_init = False
-model_name = "ZoomNet"
+model_name = "ENTO"
 
 train = dict(
     batch_size=16,

@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2020
-# @Author  : Lart Pang
-# @GitHub  : https://github.com/lartpang
-
 import torch.nn as nn
 from timm.models.layers import to_2tuple
 
